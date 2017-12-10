@@ -1,0 +1,16 @@
+FreeSans
+{
+	type 		truetype
+	source 		FreeSans.ttf
+	size		26
+	resolution	96
+}
+
+FreeSansBold
+{
+	type 		truetype
+	source 		FreeSansBold.ttf
+	size		26
+	resolution	96
+}
+

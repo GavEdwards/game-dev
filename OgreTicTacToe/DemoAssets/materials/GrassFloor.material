@@ -1,0 +1,15 @@
+material CSC-30019/GrassFloor
+{
+        technique
+        {
+                pass
+                {
+                        texture_unit
+                        {
+                                texture grass_1024.jpg
+//				scale 0.1 0.1
+                        }
+                }
+        }
+}
+

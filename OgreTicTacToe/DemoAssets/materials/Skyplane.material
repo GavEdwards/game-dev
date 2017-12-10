@@ -1,0 +1,16 @@
+material CSC-30019/ODESky
+{
+        technique
+        {
+                pass
+                {
+                        lighting off
+                        texture_unit
+                        {
+                                texture sky.ppm
+				scroll_anim 0.25 0.25
+                        }
+                }
+        }
+}
+

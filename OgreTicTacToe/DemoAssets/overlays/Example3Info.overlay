@@ -1,0 +1,35 @@
+CSC-30019/Example3Overlay
+{
+    zorder 200
+
+    container Panel(CSC-30019/Example3Overlay/MainPanel)
+    {
+        metrics_mode        pixels
+        left                10
+        top                 10
+        width               500
+        height              70
+        material            CSC-30019/PlainBlue
+
+        element TextArea(CSC-30019/Example3Overlay/MainPanel/Title)
+        {
+            metrics_mode    pixels
+            left            10
+            top             10
+            font_name       FreeSansBold
+            char_height     26
+            colour          0.8 0.8 0.8
+        }
+
+        element TextArea(CSC-30019/Example3Overlay/MainPanel/InfoText)
+        {
+            metrics_mode    pixels
+            left            10
+            top             40
+            font_name       FreeSans
+            char_height     20
+            colour          0.8 0.8 0.8
+           
+        }
+    }
+}

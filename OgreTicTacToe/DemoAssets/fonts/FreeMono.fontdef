@@ -1,0 +1,16 @@
+FreeMono
+{
+	type 		truetype
+	source 		FreeMono.ttf
+	size		26
+	resolution	96
+}
+
+FreeMonoBold
+{
+	type 		truetype
+	source 		FreeMonoBold.ttf
+	size		26
+	resolution	96
+}
+

@@ -1,0 +1,44 @@
+material CSC-30019/Tile1
+{
+        technique
+        {
+                pass
+                {
+                        texture_unit
+                        {
+                                texture check.jpg
+				scale 1 1
+                        }
+                }
+        }
+}
+material CSC-30019/Tile1-Selected
+{
+        technique
+        {
+                pass
+                {
+                        lighting off
+                        texture_unit
+                        {
+                                texture check.jpg
+                                scale 1 1
+                        }
+                }
+        }
+}
+
+material CSC-30019/Tile2
+{
+        technique
+        {
+                pass
+                {
+                        texture_unit
+                        {
+                                texture tile.png
+                                scale 1 1
+                        }
+                }
+        }
+}
