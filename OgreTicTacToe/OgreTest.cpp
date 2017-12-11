@@ -27,7 +27,6 @@ Player *p2;
 Player *turn;
 unsigned int boardNo, spaceNo;
 
-
 // OGRE variables
 Ogre::Root *root;
 Ogre::RenderWindow *window;
@@ -35,16 +34,16 @@ Ogre::Viewport *vp;
 //smgr is also refernced in the other file using extern
 Ogre::SceneManager *smgr;
 
-
 Ogre::Camera *cam;
 
 Ogre::SceneNode *o_ground;
-Ogre::SceneNode *buggyNode, *wheel1node, *wheel2node, *wheel3node;
+Ogre::SceneNode *buggyNode, *wheel1node, *wheel2node, *wheel3node, *wheel4node;
 Ogre::SceneNode *groundBoxNode;
 Ogre::SceneNode *spacesNode[9];
 
 // Camera
-float camx = 0.0, camy = 10.75, camz = 0.0;
+bool firstPerson = false;
+float camx = 0.0, camy = 40.75, camz = 0.0;
 float camradius = 2.0, camangle = 0.0;
 
 OIS::Mouse *mouse;
@@ -70,7 +69,7 @@ static void simLoop(int pause);
 #define HEIGHT 0.2	// chassis height
 #define RADIUS 0.18	// wheel radius
 #define STARTZ 0.5	// starting height of chassis
-#define CMASS 1		// chassis mass
+#define CMASS 0.5		// chassis mass
 #define WMASS 0.2	// wheel mass
 
 // dynamics and collision objects (chassis, 3 wheels, environment)
@@ -79,21 +78,19 @@ static dWorldID world;
 //dworld space refernces by other file using extern
 dSpaceID space;
 
-static dBodyID body[4];
-static dJointID joint[3];	// joint[0] is the front wheel
+static dBodyID body[5];
+static dJointID joint[4];	// joint[0] is the front wheel
 static dJointGroupID contactgroup;
 static dGeomID ground;
 static dSpaceID car_space;
 static dGeomID box[1];
-static dGeomID sphere[3];
+static dGeomID sphere[4];
 static dGeomID ground_box;
 static dGeomID spaces[9];
 
 // things that the user controls
 
 static dReal speed=0,steer=0;	// user commands
-
-
 
 
 // this is called by dSpaceCollide when two objects in space are
@@ -177,16 +174,19 @@ static void gameLoop() {
         const OIS::MouseState state = mouse->getMouseState();
 
         if (keyboard->isKeyDown(OIS::KC_ESCAPE)) break;
-
         if( keyboard->isKeyDown(OIS::KC_A)) { speed += 0.13; }
         if( keyboard->isKeyDown(OIS::KC_Z)) { speed -= 0.13;}
         if( keyboard->isKeyDown(OIS::KC_COMMA)) steer -= 0.15;
         if( keyboard->isKeyDown(OIS::KC_PERIOD)) steer += 0.15;
         if( keyboard->isKeyDown(OIS::KC_SPACE)) { speed = 0; steer = 0; }
-        if( keyboard->isKeyDown(OIS::KC_UP)) camradius += 0.1;
-        if( keyboard->isKeyDown(OIS::KC_DOWN)) camradius -= 0.1;
+        if( keyboard->isKeyDown(OIS::KC_UP)) camradius += 0.5;
+        if( keyboard->isKeyDown(OIS::KC_DOWN)) camradius -= 0.5;
         if( keyboard->isKeyDown(OIS::KC_LEFT)) camangle -= M_PI / 30.0;
         if( keyboard->isKeyDown(OIS::KC_RIGHT)) camangle += M_PI / 30.0;
+
+        if( keyboard->isKeyDown(OIS::KC_F)) { firstPerson = true;}
+        if( keyboard->isKeyDown(OIS::KC_T)) { camx = 0.0; camy = 40.75; camz = 0.0; camradius = 2.0; camangle = 0.0; firstPerson = false;}
+
 
         // Work out how much time has elapsed, add to accumulator
         lastTime = currentTime;
@@ -207,85 +207,107 @@ static void gameLoop() {
             accumulator -= frame_length;
         }
 
-        // Camera is stuck on a circle on the X-Z plane, camradius from the origin at camangle
-        // x = cos(angle) * r; z = sin(angle)*r;
-        camx = cosf(camangle) * camradius;
-        camz = sinf(camangle) * camradius;
-
-        cam->setPosition(Ogre::Vector3(camx,camy,camz));
         // Look at the origin (0,0,0):
         // cam->lookAt(Ogre::Vector3(0,0,0));
 
         // Or look at the buggy instead?
-        cam->lookAt( buggyNode->getPosition() );
+        if(firstPerson){
 
+          Ogre::Vector3 testpos = buggyNode->getPosition();
+          Ogre::Quaternion testrot = buggyNode->_getDerivedOrientation();
+
+          //camx = testpos.x - testrot.w * 2; camy=testpos.y ; camz = testpos.z - testrot.y * 2;
+          camx = testpos.x + 3 ; camy=testpos.y ; camz = testpos.z;
+
+          //Ogre::Vector3 lookAt = Ogre::Vector3( -atan2(-testrot.y, testrot.w)*180/M_PI, 0, 0);
+          //cam->setDirection(lookAt);
+          //cam->lookAt( lookAt );
+          cam->lookAt( buggyNode->getPosition() );
+          //cam->lookAt(Ogre::Vector3(0,0,0));
+        } else {
+          // Camera is stuck on a circle on the X-Z plane, camradius from the origin at camangle
+          // x = cos(angle) * r; z = sin(angle)*r;
+          camx = cosf(camangle) * camradius;
+          camz = sinf(camangle) * camradius;
+          cam->lookAt( buggyNode->getPosition() );
+        }
+
+        cam->setPosition(Ogre::Vector3(camx,camy,camz));
 
         /*
         *  Ray tracing code for mouse pointer
         */
+        //if the mouse is clicked
+        if( mouse->getMouseState().buttonDown(OIS::MB_Left) ){
+           std::cout<<"MOUSE CLICK\n";
 
-        // Get normalised mouse coordinates
-        float sc_x = (float) state.X.abs / vp->getActualWidth();
-        float sc_y = (float) state.Y.abs / vp->getActualHeight();
+          // Get normalised mouse coordinates
+          float sc_x = (float) state.X.abs / vp->getActualWidth();
+          float sc_y = (float) state.Y.abs / vp->getActualHeight();
 
-        // Create a ray using the mouse coordinates
-        Ogre::Ray pick_ray = cam->getCameraToViewportRay(sc_x, sc_y);
+          // Create a ray using the mouse coordinates
+          Ogre::Ray pick_ray = cam->getCameraToViewportRay(sc_x, sc_y);
 
-        // Give the scene query the ray
-        mSceneQuery->setRay(pick_ray);
+          // Give the scene query the ray
+          mSceneQuery->setRay(pick_ray);
 
-        // Execute the scene query
-        Ogre::RaySceneQueryResult& result = mSceneQuery->execute();
+          // Execute the scene query
+          Ogre::RaySceneQueryResult& result = mSceneQuery->execute();
 
-        // If we had a hit in the ray query, get the entity from the first result
-        // (there may be more than one) and set it to a "selected" material:
+          // If we had a hit in the ray query, get the entity from the first result
+          // (there may be more than one) and set it to a "selected" material:
+          if( !result.empty() )
+          {
+            for(int j = 0; j<9; j++){
+              for(int i = 0; i<9; i++){
+                if((result[0].movable)->getParentSceneNode() == mb->spaces[j]->spaces[i]->OgreNode) //->movable->getName().compare("Ogre/MO1") == 0)
+                {
+                  mb->spaces[j]->spaces[i]->OgreNode->showBoundingBox(true);
 
-        if( !result.empty() )
-        {
-          //std::cout<< itr->movable->getName() << std::endl;
-          for(int i = 0; i<9; i++){
-            if((result[0].movable)->getParentSceneNode() == spacesNode[i]) //->movable->getName().compare("Ogre/MO1") == 0)
-            {
+                  std::cout<< "It is " << turn->getName() <<"'s turn!" << std::endl;
 
-              //mb->spaces->Board::OgreNode->showBoundingBox(true);
-              spacesNode[i]->showBoundingBox(true);
-              //static_cast<Ogre::Entity*>(itr->movable)->setMaterialName("CSC-30019/Tile1-Selected");
+                  if( mb->makeMove(turn,j,i) )
+                  {
+                    //change turn for the next round
+                    if(turn == p1){
+                    mb->spaces[j]->spaces[i]->OgreEntity->setMaterialName( "CSC-30019/Space1");//"CSC-30019/Tile1-Selected");
 
-              //game logic
-              if(turn == p1)
-                turn = p2;
-              else
-                turn = p1;
+                      if( mb->spaces[j]->checkBoard() )
+                      {
+                          mb->spaces[j]->OgreEntity->setMaterialName( "CSC-30019/Space1");
+                          if( mb->checkBoard() ) exit(1);
+                      }
 
-              std::cout<< "It is " << turn->getName() <<"'s turn!" << std::endl;
+                      turn = p2;
+                    }
+                    else if(turn == p2){
+                    mb->spaces[j]->spaces[i]->OgreEntity->setMaterialName( "CSC-30019/Space2");//"CSC-30019/Tile1-Selected");
 
-              std::cout<<"Enter board number: ";
-              std::cin >> boardNo;
-              std::cout<<"Enter space number: ";
-              std::cin>>spaceNo;
+                      if( mb->spaces[j]->checkBoard() )
+                      {
+                          mb->spaces[j]->OgreEntity->setMaterialName( "CSC-30019/Space2");
+                          if( mb->checkBoard() ) exit(1);
+                      }
+                      turn = p1;
 
-              std::cout<< "\n--------------\n";
+                    }
 
-              mb->makeMove(turn,boardNo,spaceNo);
+                  }
 
-              if( mb->spaces[boardNo].checkBoard() )
-              {
-                  if( mb->checkBoard() ) exit(1);
-              }
+                  mb->printBoard();
 
-              mb->printBoard();
 
-            } else {
-              spacesNode[i]->showBoundingBox(false);
-              //spacesNode[i]->movable->setMaterialName("CSC-30019/Tile1");
+                } else {
+                  mb->spaces[j]->spaces[i]->OgreNode->showBoundingBox(false);
 
-            }
+                }//end if a board space object
+              }//end for loop for space
+            }//end for loop for board
+          }//end if not empty
 
-          }
+          std::cout<< "It is " << turn->getName() <<"'s turn!" << std::endl;
 
-        }
-
-        //std::cout << "Mouse pos: " << state.X.abs << " : " << state.Y.abs << std::endl;
+        }//end if click
 
         // renderOneFrame returns false if it fails, so we will bail in that case.
         if(root->renderOneFrame() == false)
@@ -300,6 +322,8 @@ static void setPlayers(char *name1, char *name2)
   p2 = new Player(name2);
   std::cout<< "Created Player 1: " << p1->getName() << std::endl;
   std::cout<< "Created Player 2: " << p2->getName() << std::endl;
+  //make player 1 have their turn first
+  turn = p1;
 
 }
 
@@ -311,28 +335,28 @@ static void simLoop (int pause)
     int i;
 
     if (!pause) {
+      for(int i = 0; i < 2; i++){
         // motor
-        dJointSetHinge2Param (joint[0],dParamVel2,-speed);
-        dJointSetHinge2Param (joint[0],dParamFMax2,0.1);
+        dJointSetHinge2Param (joint[i],dParamVel2,-speed);
+        dJointSetHinge2Param (joint[i],dParamFMax2,0.1);
 
         // steering
-        dReal v = steer - dJointGetHinge2Angle1 (joint[0]);
+        dReal v = steer - dJointGetHinge2Angle1 (joint[i]);
         if (v > 0.1) v = 0.1;
         if (v < -0.1) v = -0.1;
         v *= 10.0;
-        dJointSetHinge2Param (joint[0],dParamVel,v);
-        dJointSetHinge2Param (joint[0],dParamFMax,0.2);
-        dJointSetHinge2Param (joint[0],dParamLoStop,-0.75);
-        dJointSetHinge2Param (joint[0],dParamHiStop,0.75);
-        dJointSetHinge2Param (joint[0],dParamFudgeFactor,0.1);
-
+        dJointSetHinge2Param (joint[i],dParamVel,v);
+        dJointSetHinge2Param (joint[i],dParamFMax,0.2);
+        dJointSetHinge2Param (joint[i],dParamLoStop,-0.75);
+        dJointSetHinge2Param (joint[i],dParamHiStop,0.75);
+        dJointSetHinge2Param (joint[i],dParamFudgeFactor,0.1);
+      }
         dSpaceCollide (space,0,&nearCallback);
         dWorldStep (world,0.05);
 
         // remove all contact joints
         dJointGroupEmpty (contactgroup);
     }
-
 
     // GET POSITIONS OF EVERYTHING FROM PHYSICS, UPDATE GRAPHICS
     const dReal *boxpos = dBodyGetPosition(body[0]);
@@ -343,17 +367,6 @@ static void simLoop (int pause)
 
     const dReal *gbpos = dGeomGetPosition(ground_box);
     dReal gbrot[4];  dGeomGetQuaternion(ground_box,gbrot);
-
-    //NEW
-    /*
-    for(int i = 0; i < 9; i++){
-        const dReal *gbpos2 = dGeomGetPosition(spaces[i]);
-        dReal gbrot2[4];  dGeomGetQuaternion(spaces[i],gbrot2);
-        spacesNode[i]->setPosition(gbpos2[0],gbpos2[1],gbpos2[2]);
-        spacesNode[i]->setOrientation( gbrot2[0], gbrot2[1], gbrot2[2], gbrot2[3]);
-    }
-    */
-    //END NEW
 
     groundBoxNode->setPosition(gbpos[0],gbpos[1],gbpos[2]);
     groundBoxNode->setOrientation( gbrot[0], gbrot[1], gbrot[2], gbrot[3]);
@@ -376,6 +389,11 @@ static void simLoop (int pause)
     wheel3node->setPosition(w3pos[0], w3pos[1], w3pos[2]);
     wheel3node->setOrientation(w3rot[0], w3rot[1], w3rot[2], w3rot[3]);
 
+    const dReal *w4pos = dBodyGetPosition(body[4]);
+    const dReal *w4rot = dBodyGetQuaternion(body[4]);
+
+    wheel4node->setPosition(w4pos[0], w4pos[1], w4pos[2]);
+    wheel4node->setOrientation(w4rot[0], w4rot[1], w4rot[2], w4rot[3]);
 
 }
 
@@ -387,7 +405,6 @@ int main (int argc, char **argv)
 
     // OGRE Initialisation
     initialise();
-
 
     // BEGIN old ODE code which does the buggy simulation
     // create world
@@ -408,7 +425,7 @@ int main (int argc, char **argv)
     dGeomSetBody (box[0],body[0]);
 
     // wheel bodies
-    for (i=1; i<=3; i++) {
+    for (i=1; i<=4; i++) {
         body[i] = dBodyCreate (world);
         dQuaternion q;
         dQFromAxisAndAngle (q,1,0,0,M_PI*0.5);
@@ -419,12 +436,13 @@ int main (int argc, char **argv)
         sphere[i-1] = dCreateSphere (0,RADIUS);
         dGeomSetBody (sphere[i-1],body[i]);
     }
-    dBodySetPosition (body[1],-0.5*LENGTH,STARTZ-HEIGHT*0.5,0);
-    dBodySetPosition (body[2],0.5*LENGTH, STARTZ-HEIGHT*0.5,WIDTH*0.5);
-    dBodySetPosition (body[3],0.5*LENGTH, STARTZ-HEIGHT*0.5,-WIDTH*0.5);
+    dBodySetPosition (body[1],-0.5*LENGTH,STARTZ-HEIGHT*0.5,WIDTH*0.5);
+    dBodySetPosition (body[2],-0.5*LENGTH,STARTZ-HEIGHT*0.5,-WIDTH*0.5);
+    dBodySetPosition (body[3],0.5*LENGTH, STARTZ-HEIGHT*0.5,WIDTH*0.5);
+    dBodySetPosition (body[4],0.5*LENGTH, STARTZ-HEIGHT*0.5,-WIDTH*0.5);
 
     // front and back wheel hinges
-    for (i=0; i<3; i++) {
+    for (i=0; i<4; i++) {
         joint[i] = dJointCreateHinge2 (world,0);
         dJointAttach (joint[i],body[0],body[i+1]);
         const dReal *a = dBodyGetPosition (body[i+1]);
@@ -434,20 +452,17 @@ int main (int argc, char **argv)
     }
 
     // set joint suspension
-    for (i=0; i<3; i++) {
+    for (i=0; i<4; i++) {
         dJointSetHinge2Param (joint[i],dParamSuspensionERP,0.4);
         dJointSetHinge2Param (joint[i],dParamSuspensionCFM,0.8);
     }
 
     // lock back wheels along the steering axis
-    for (i=1; i<3; i++) {
+    for (i=2; i<4; i++) {
         // set stops to make sure wheels always stay in alignment
         dJointSetHinge2Param (joint[i],dParamLoStop,0);
         dJointSetHinge2Param (joint[i],dParamHiStop,0);
-        // the following alternative method is no good as the wheels may get out
-        // of alignment:
-        //   dJointSetHinge2Param (joint[i],dParamVel,0);
-        //   dJointSetHinge2Param (joint[i],dParamFMax,dInfinity);
+
     }
 
     // create car space and add it to the top level space
@@ -457,6 +472,7 @@ int main (int argc, char **argv)
     dSpaceAdd (car_space,sphere[0]);
     dSpaceAdd (car_space,sphere[1]);
     dSpaceAdd (car_space,sphere[2]);
+    dSpaceAdd (car_space,sphere[3]);
 
     // environment
     ground_box = dCreateBox (space,2,1,1.5);
@@ -471,7 +487,7 @@ int main (int argc, char **argv)
     mb = new MainBoard();
 
     //mb->setPosition( 0, 0, 0, 0);
-
+/*
     int countT = 0;
     double marginT = 2;
 
@@ -503,9 +519,7 @@ int main (int argc, char **argv)
 
       }
     }
-
-
-
+*/
 
     // Set the scene
     window->getCustomAttribute("WINDOW", &windowHnd);
@@ -518,15 +532,8 @@ int main (int argc, char **argv)
     cam->setAspectRatio(Ogre::Real(vp->getActualWidth()) / Ogre::Real(vp->getActualHeight()) );
 
     // SKYBOX
-    smgr->setSkyBox(true, "CSC-30019/CloudsSkyBox");
+    smgr->setSkyBox(true, "CSC-30019/TrippySkyBox");
 
-    // Ground plane
-    Ogre::Plane oground(0,1,0,0);
-    Ogre::MeshManager::getSingleton().createPlane("ground", Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME,
-                                                  oground, 10, 10, 1, 1, true, 1, 10, 10, Ogre::Vector3::UNIT_Z );
-    Ogre::Entity *entGround = smgr->createEntity("GroundEntity", "ground");
-    entGround->setMaterialName("CSC-30019/GrassFloor");
-    smgr->getRootSceneNode()->createChildSceneNode()->attachObject( entGround );
 
     // Nodes for the buggy and the angled box in the ground
     buggyNode = smgr->getRootSceneNode()->createChildSceneNode("buggynode");
@@ -540,15 +547,13 @@ int main (int argc, char **argv)
     //char ids[9] = {'1','2','3','4','5','6','7','8','9'};
     Ogre::Entity *spacest[9];
     for(int i =0; i<9; i++){
-       //const char* name = "space" + i;
-
-       //need to make version that accepts custom string id's
        spacest[i]= smgr->createEntity("cube.mesh");
      }
 
     Ogre::Entity *wheel1 = smgr->createEntity("wheel1", "sphere.mesh");
     Ogre::Entity *wheel2 = smgr->createEntity("wheel2", "sphere.mesh");
     Ogre::Entity *wheel3 = smgr->createEntity("wheel3", "sphere.mesh");
+    Ogre::Entity *wheel4 = smgr->createEntity("wheel4", "sphere.mesh");
 
     //gbent->setMaterial(mp);
     buggyNode->attachObject(ent);// buggyNode->attachObject(cam);
@@ -566,6 +571,10 @@ int main (int argc, char **argv)
     wheel3node->attachObject(wheel3);
     wheel3node->scale(0.002,0.0005,0.002);
     wheel3node->setPosition(-0.5*LENGTH,STARTZ-HEIGHT*0.5,0);
+    wheel4node = smgr->getRootSceneNode()->createChildSceneNode("wheel4node");
+    wheel4node->attachObject(wheel4);
+    wheel4node->scale(0.002,0.0005,0.002);
+    wheel4node->setPosition(-0.5*LENGTH,STARTZ-HEIGHT*0.5,0);
 
 
     ent->setMaterialName("CSC-30019/Tile1");
@@ -575,14 +584,6 @@ int main (int argc, char **argv)
     groundBoxNode->scale(0.02,.01,.015);
 
     //set spaces texture
-
-    for(int i =0; i<9; i++){
-      spacesNode[i] = smgr->getRootSceneNode()->createChildSceneNode("spacenode"+i);
-      spacest[i]->setMaterialName("CSC-30019/Tile1");
-      spacesNode[i]->attachObject(spacest[i]);
-      spacesNode[i]->scale(0.01,.01,.01);
-    }
-
 
 
     // Set the ambient lighting in the scene
@@ -597,9 +598,6 @@ int main (int argc, char **argv)
     // Shadows have to be enabled though
     smgr->setShadowTechnique(Ogre::SHADOWTYPE_STENCIL_ADDITIVE);
 
-//delete this
-Ogre::SceneNode *OgreNode2 = smgr->getRootSceneNode()->createChildSceneNode("testNodebefore");
-
 
     //WRAP IN TRY CATCH TO VALIDATE USER INPUT
       char n1[15], n2[15];
@@ -609,13 +607,9 @@ Ogre::SceneNode *OgreNode2 = smgr->getRootSceneNode()->createChildSceneNode("tes
       std::cin>> n2;
       setPlayers(n1, n2);
 
-
     // render a frame for good measure
     root->renderOneFrame();
     // END OGRE Initialisation
-
-
-
 
     // run simulation (using our own game loop)
     gameLoop();
@@ -636,7 +630,6 @@ Ogre::SceneNode *OgreNode2 = smgr->getRootSceneNode()->createChildSceneNode("tes
 
 void initialise()
 {
-
 
     std::string resourcePath;
     resourcePath = "";
@@ -667,8 +660,6 @@ void initialise()
         }
     }
 
-
-
     Ogre::ResourceGroupManager::getSingleton().initialiseAllResourceGroups();
 
     window = root->initialise(true);
@@ -676,6 +667,5 @@ void initialise()
     std::cout << "-------- \n"<< smgr << std::endl;
     smgr = root->createSceneManager(Ogre::ST_GENERIC);
     std::cout << "-------- \n"<< smgr << std::endl;
-
 
 }

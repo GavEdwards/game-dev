@@ -1,0 +1,30 @@
+material CSC-30019/Space1
+{
+        technique
+        {
+                pass
+                {
+                        texture_unit
+                        {
+                                texture nm_up.png
+				scale 1 1
+                        }
+                }
+        }
+}
+
+
+material CSC-30019/Space2
+{
+        technique
+        {
+                pass
+                {
+                        texture_unit
+                        {
+                                texture nm_fr.png
+                                scale 1 1
+                        }
+                }
+        }
+}

@@ -25,11 +25,11 @@ private:
   char *name;
 };
 
+
 class Space
 {
 public:
-  Space();
-  Space(int x, int z, int y, double margin);
+  Space(int x, int z, int y, dSpaceID space);
   ~Space(){ delete state;}
   void setPosition(int x, int z, int y, double margin);
   bool setSpace();
@@ -46,37 +46,25 @@ public:
 class Board
 {
 public:
-  Board();
+  Board(int x, int z, int y, double margin);
   //Board(char* meshType);
   ~Board(){delete state;}
+  void setPosition(int x, int z, int y, double margin);
   void printBoard();
   bool checkBoard();
   bool updateState(Player *p);
-  Space spaces[9];
+  Space *spaces[9];
   Player *state = NULL;
   dGeomID ODEgeomID;
+  dSpaceID ODEspaceID;
   Ogre::SceneNode *OgreNode;
   Ogre::Entity *OgreEntity;
   int posX, posY, posZ;
 };
 
-//create a 'winnable' class that has the state variable for others to inherit
-
-
-//THERE ARE 10 SPACES PRINTED EACH TIME AS INNER BOARD INHERTITS SPACE
-class InnerBoard : public Board, public Space
-{
-  //will need to use explicit somewhere to avoid inhertience conflicts
-  public:
-    InnerBoard() : Board() {}//, Space() {}
-    ~InnerBoard(){ }
-
-};
-
-
 
 //template <class T>
-class MainBoard : public Board //inherits from board
+class MainBoard  //inherits from board
 {
   public:
     MainBoard();
@@ -84,7 +72,13 @@ class MainBoard : public Board //inherits from board
     void printBoard();
     bool makeMove(Player *player, unsigned int j, unsigned int i);
     bool checkBoard();
+
+
+    Player *state = NULL;
+    dGeomID ODEgeomID;
+    Ogre::SceneNode *OgreNode;
+    Ogre::Entity *OgreEntity;
     //try and make spaces generic?
-    InnerBoard spaces[9];
+    Board *spaces[9];
 
 };
