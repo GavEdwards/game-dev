@@ -70,7 +70,7 @@ class MainBoard  //inherits from board
     MainBoard();
     ~MainBoard(){}
     void printBoard();
-    bool makeMove(Player *player, unsigned int j, unsigned int i);
+    bool makeMove(Player *player, unsigned int j, unsigned int i, unsigned int lastMove);
     bool checkBoard();
 
 

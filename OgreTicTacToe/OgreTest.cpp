@@ -26,6 +26,7 @@ Player *p2;
 
 Player *turn;
 unsigned int boardNo, spaceNo;
+unsigned int lastMove = 20;
 
 // OGRE variables
 Ogre::Root *root;
@@ -266,7 +267,7 @@ static void gameLoop() {
 
                   std::cout<< "It is " << turn->getName() <<"'s turn!" << std::endl;
 
-                  if( mb->makeMove(turn,j,i) )
+                  if( mb->makeMove(turn,j,i, lastMove) )
                   {
                     //change turn for the next round
                     if(turn == p1){
@@ -292,10 +293,11 @@ static void gameLoop() {
 
                     }
 
+                    lastMove = i;
+
                   }
 
                   mb->printBoard();
-
 
                 } else {
                   mb->spaces[j]->spaces[i]->OgreNode->showBoundingBox(false);

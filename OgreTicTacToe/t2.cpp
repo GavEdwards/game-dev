@@ -104,13 +104,56 @@ bool Board::checkBoard(){
 
       }
 
-      if(vmatch) match = true;
+      if(vmatch){ match = true; break;}
 
+
+
+    }//end for loop
+
+    //check for diaganal wins
+
+
+
+for(int x = 0; x < 2; x++){
+
+  int l, r, t;
+
+  if(x == 0){
+    l = 0;
+    r = 9;
+    t = 4;
+  } else {
+    l = 2;
+    r = 7;
+    t = 2;
+  }
+
+bool dmatch = true;
+
+  Player *diagTemp = this->spaces[l]->state;
+
+      for(int j =l; j<r; j+=t)
+      {
+
+        if(this->spaces[j]->state == NULL || this->spaces[j]->state != diagTemp)
+        {
+          dmatch = false;
+          break;
+          std::cout << "NO MATCH: " << &diagTemp << " : " << this->spaces[j]->state <<std::endl;
+
+        }else {
+          winningPlayer = this->spaces[j]->state;
+        }
 
       }
 
+  if(dmatch){ match = true; break;}
+
+}
+
+
       if(match){
-        std::cout<<"Board Won! by: " << winningPlayer->getName();
+        std::cout<<"Board Won! by: " << winningPlayer->getName() << std::endl;
         //std::cout << " | "<< winningPlayer->getName() << std::endl;
         //std::cout << "\n before: " << this->Board::state<<std::endl;
         this->Board::state = winningPlayer;
@@ -205,11 +248,18 @@ void MainBoard::printBoard()
 
 }
 
-bool MainBoard::makeMove(Player *player, unsigned int j, unsigned int i)
+bool MainBoard::makeMove(Player *player, unsigned int j, unsigned int i,  unsigned int lastMove)
 {
 
-  if( j < 9 && i <9 && this->spaces[j]->spaces[i]->state == NULL && this->spaces[j]->state ==NULL )
+  if(lastMove == 20){ lastMove = j; std::cout<< "FIRST MOVE\n\n";}
+
+  if(this->spaces[j]->state != NULL){std::cout<< "BOARD TAKEN, YOU CAN PLAY ANYWHERE ELSE\n\n";}
+
+  if(this->spaces[lastMove]->state != NULL){ lastMove = j; std::cout<< "YOU CAN PLAY ANYWHERE\n\n";}
+
+  if( j < 9 && i <9 && this->spaces[j]->spaces[i]->state == NULL && this->spaces[j]->state ==NULL && lastMove == j )
   {
+
     this->spaces[j]->spaces[i]->state = player;
     return true;
   }
@@ -227,7 +277,6 @@ bool MainBoard::checkBoard()
   bool match = false;
   Player *winningPlayer;
 
-  std::cout<< "CHECKING FOR MAIN WIN\n";
     for(int i = 0; i < 7; i += 3){
 
       bool hmatch = true;
@@ -268,19 +317,52 @@ bool MainBoard::checkBoard()
         }
       }
 
-      if(vmatch) match = true;
+      if(vmatch){ match = true; break;}
 
 
       }
 
-      std::cout<<"CHECKS DONE"<< std::endl;
+      //check for diaganal wins
 
+
+
+      for(int x = 0; x < 2; x++){
+
+      int l, r, t;
+
+      if(x == 0){
+      l = 0;
+      r = 9;
+      t = 4;
+      } else {
+      l = 2;
+      r = 7;
+      t = 2;
+      }
+
+      bool dmatch = true;
+
+      Player *diagTemp = this->spaces[l]->state;
+
+        for(int j =l; j<r; j+=t)
+        {
+
+          if(this->spaces[j]->state == NULL || this->spaces[j]->state != diagTemp)
+          {
+            dmatch = false;
+            break;
+            std::cout << "NO MATCH: " << &diagTemp << " : " << this->spaces[j]->state <<std::endl;
+
+          }else {
+            winningPlayer = this->spaces[j]->state;
+          }
+
+        }
+
+      if(dmatch){ match = true; break;}
+
+}
       if(match){
-        /*
-
-        * THIS NEEDS FIXING TO PRINT PLAYER NAME WITHOUT A SEG FAULT
-
-        */
 
         std::cout<< "---------------\n"<<"GAME WON! by: " << winningPlayer->getName();
         std::cout << "\n---------------"<<std::endl;
