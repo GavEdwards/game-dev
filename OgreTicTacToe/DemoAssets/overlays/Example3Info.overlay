@@ -8,7 +8,7 @@ CSC-30019/Example3Overlay
         left                10
         top                 10
         width               500
-        height              70
+        height              130
         material            CSC-30019/PlainBlue
 
         element TextArea(CSC-30019/Example3Overlay/MainPanel/Title)
@@ -31,5 +31,27 @@ CSC-30019/Example3Overlay
             colour          0.8 0.8 0.8
            
         }
+
+        element TextArea(CSC-30019/Example3Overlay/MainPanel/InfoText2)
+        {
+            metrics_mode    pixels
+            left            10
+            top             70
+            font_name       FreeSans
+            char_height     20
+            colour          0.8 0.8 0.8
+        }
+
+        element TextArea(CSC-30019/Example3Overlay/MainPanel/GameState)
+        {
+            metrics_mode    pixels
+            left            10
+            top             100
+            font_name       FreeSansBold
+            char_height     20
+            colour          1 1 1
+           
+        }
+
     }
 }

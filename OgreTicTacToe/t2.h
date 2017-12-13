@@ -5,6 +5,15 @@
 #include <OGRE/Ogre.h>
 #include <OIS/OIS.h>
 #include <iostream>
+#include <cstdlib>
+//overlay
+#include <OgreOverlay.h>
+#include <OgreOverlayElement.h>
+#include <OgreOverlayManager.h>
+#include <OgreOverlaySystem.h>
+#include <OgreTextAreaOverlayElement.h>
+#include <OgreFontManager.h>
+
 
 #include <string>
 

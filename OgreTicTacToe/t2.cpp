@@ -4,6 +4,9 @@
 extern Ogre::SceneManager *smgr;
 extern dSpaceID space;
 
+extern Ogre::TextAreaOverlayElement* infoText;
+extern Ogre::TextAreaOverlayElement* infoText2;
+extern Ogre::TextAreaOverlayElement* gameState;
 
 
 Board::Board(int x, int y, int z, double margin)
@@ -154,6 +157,7 @@ bool dmatch = true;
 
       if(match){
         std::cout<<"Board Won! by: " << winningPlayer->getName() << std::endl;
+        gameState->setCaption("Board Won! by: " + std::string(winningPlayer->getName() ));
         //std::cout << " | "<< winningPlayer->getName() << std::endl;
         //std::cout << "\n before: " << this->Board::state<<std::endl;
         this->Board::state = winningPlayer;
@@ -162,7 +166,7 @@ bool dmatch = true;
         return true;
     } else {
       std::cout<<"no board won" <<std::endl;
-
+      gameState->setCaption("-");
       return false;
     }
 }
@@ -197,7 +201,7 @@ MainBoard::MainBoard()
 
   Ogre::Plane oground(0,1,0,0);
   Ogre::MeshManager::getSingleton().createPlane("ground", Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME,
-                                                oground, 35, 35, 1, 1, true, 1, 35, 35, Ogre::Vector3::UNIT_Z );
+                                                oground, 55, 55, 1, 1, true, 1, 55, 55, Ogre::Vector3::UNIT_Z );
   Ogre::Entity *OgreEntity = smgr->createEntity("ground");
   OgreEntity->setMaterialName("CSC-30019/GrassFloor");
   smgr->getRootSceneNode()->createChildSceneNode()->attachObject( OgreEntity );
@@ -251,21 +255,40 @@ void MainBoard::printBoard()
 bool MainBoard::makeMove(Player *player, unsigned int j, unsigned int i,  unsigned int lastMove)
 {
 
-  if(lastMove == 20){ lastMove = j; std::cout<< "FIRST MOVE\n\n";}
+  if(lastMove == 20){
+    lastMove = j;
+    std::cout<< "FIRST MOVE\n\n";
+    infoText2->setCaption("FIRST MOVE");
 
-  if(this->spaces[j]->state != NULL){std::cout<< "BOARD TAKEN, YOU CAN PLAY ANYWHERE ELSE\n\n";}
-
-  if(this->spaces[lastMove]->state != NULL){ lastMove = j; std::cout<< "YOU CAN PLAY ANYWHERE\n\n";}
+  }
+  if(this->spaces[j]->state != NULL){
+    std::cout<< "BOARD TAKEN, YOU CAN PLAY ANYWHERE ELSE\n\n";
+    infoText2->setCaption("BOARD TAKEN, YOU CAN PLAY ANYWHERE ELSE");
+  }
+  if(this->spaces[lastMove]->state != NULL){
+     lastMove = j;
+     std::cout<< "YOU CAN PLAY ANYWHERE\n\n";
+     infoText2->setCaption("YOU CAN PLAY ANYWHERE");
+   }
 
   if( j < 9 && i <9 && this->spaces[j]->spaces[i]->state == NULL && this->spaces[j]->state ==NULL && lastMove == j )
   {
+    infoText2->setCaption("successful move made");
 
     this->spaces[j]->spaces[i]->state = player;
     return true;
   }
   else
   {
-    std::cout<<"ILLEGAL MOVE"<<std::endl;
+      std::cout<<"ILLEGAL MOVE"<<std::endl;
+      //if not already notified of illegal move, notify them
+      std::string cap =  infoText2->getCaption();
+
+      if(cap.find("ILLEGAL MOVE") == std::string::npos){
+        infoText2->setCaption(infoText2->getCaption() + " - ILLEGAL MOVE");
+        std::cout << "TESTING!!!!!!!!!!!!";
+    }
+
     return false;
   }
 }
@@ -293,7 +316,7 @@ bool MainBoard::checkBoard()
           hmatch = false;
           break;
         }else {
-          winningPlayer = this->spaces[i + j]->state;
+          //winningPlayer = this->spaces[i + j]->state;
         }
 
       }
@@ -313,7 +336,7 @@ bool MainBoard::checkBoard()
           vmatch = false;
           break;
         } else {
-          winningPlayer = this->spaces[i/3 + j]->state;
+          //winningPlayer = this->spaces[i/3 + j]->state;
         }
       }
 
@@ -323,8 +346,6 @@ bool MainBoard::checkBoard()
       }
 
       //check for diaganal wins
-
-
 
       for(int x = 0; x < 2; x++){
 
@@ -366,7 +387,7 @@ bool MainBoard::checkBoard()
 
         std::cout<< "---------------\n"<<"GAME WON! by: " << winningPlayer->getName();
         std::cout << "\n---------------"<<std::endl;
-
+        gameState->setCaption( "GAME WON! by: " + std::string(winningPlayer->getName() ) );
         this->state = winningPlayer;
 
         return true;
@@ -382,7 +403,7 @@ bool MainBoard::checkBoard()
 Space::Space(int x, int z, int y, dSpaceID space)
 {
 
-  ODEgeomID = dCreateBox(space,1,1,1);//
+  ODEgeomID = dCreateBox(space,1,0,1);//
 
 
   dGeomSetPosition (ODEgeomID, x , z , y );
@@ -392,7 +413,7 @@ Space::Space(int x, int z, int y, dSpaceID space)
   const dReal *boardPos = dGeomGetPosition(ODEgeomID);
   dReal boardRot[4];  dGeomGetQuaternion(ODEgeomID, boardRot);
   OgreNode->setPosition(boardPos[0],boardPos[1],boardPos[2]);
-  OgreNode->setOrientation( boardRot[0], boardRot[1], boardRot[2], boardRot[3]);
+  OgreNode->setOrientation( boardRot[0] , boardRot[1], boardRot[2], boardRot[3]);
 
   OgreEntity = smgr->createEntity("cube.mesh");//
   //OgreEntity = smgr->createEntity("sphere.mesh");

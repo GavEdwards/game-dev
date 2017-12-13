@@ -35,27 +35,36 @@ Ogre::Viewport *vp;
 //smgr is also refernced in the other file using extern
 Ogre::SceneManager *smgr;
 
-Ogre::Camera *cam;
+
 
 Ogre::SceneNode *o_ground;
 Ogre::SceneNode *buggyNode, *wheel1node, *wheel2node, *wheel3node, *wheel4node;
-Ogre::SceneNode *groundBoxNode;
+
+Ogre::SceneNode *bullets[5];
 Ogre::SceneNode *spacesNode[9];
 
 // Camera
+Ogre::Camera *cam;
+Ogre::Camera *camFP;
+Ogre::SceneNode *FPcamNode;
+
 bool firstPerson = false;
 float camx = 0.0, camy = 40.75, camz = 0.0;
 float camradius = 2.0, camangle = 0.0;
 
+float camxFP = 2.0, camyFP = 2, camzFP = 0.0;
+float camradiusFP = 2.0, camangleFP = 0.0;
+float camRotXFP = 6.0, camRotZFP = 0.0;
 OIS::Mouse *mouse;
 size_t windowHnd = 0;
 
 //Overlay UI
-/*
 Ogre::Overlay *overlay;
 Ogre::OverlayElement *mainPanel;
 Ogre::TextAreaOverlayElement* infoText;
-*/
+Ogre::TextAreaOverlayElement* infoText2;
+Ogre::TextAreaOverlayElement* gameState;
+Ogre::OverlayManager* overlayMgr;
 
 //user input manager (show mouse etc)
 OIS::InputManager* im;
@@ -63,6 +72,8 @@ OIS::InputManager* im;
 // Function prototypes (that are defined later)
 void initialise();
 static void simLoop(int pause);
+void fireBullet();
+bool cannonMode();
 
 // some constants
 #define LENGTH 0.7	// chassis length
@@ -72,6 +83,7 @@ static void simLoop(int pause);
 #define STARTZ 0.5	// starting height of chassis
 #define CMASS 0.5		// chassis mass
 #define WMASS 0.2	// wheel mass
+#define BMASS 0.01		// bullet mass
 
 // dynamics and collision objects (chassis, 3 wheels, environment)
 
@@ -79,14 +91,13 @@ static dWorldID world;
 //dworld space refernces by other file using extern
 dSpaceID space;
 
-static dBodyID body[5];
+static dBodyID body[6]; //previously 5
 static dJointID joint[4];	// joint[0] is the front wheel
 static dJointGroupID contactgroup;
 static dGeomID ground;
 static dSpaceID car_space;
 static dGeomID box[1];
 static dGeomID sphere[4];
-static dGeomID ground_box;
 static dGeomID spaces[9];
 
 // things that the user controls
@@ -94,36 +105,112 @@ static dGeomID spaces[9];
 static dReal speed=0,steer=0;	// user commands
 
 
+double CANNON_X = 0;		// x position of cannon
+double CANNON_Z = 0.6;	// x position of cannon
+double CANNON_Y = 0;		// y position of cannon
+#define CANNON_BALL_MASS 10	// mass of the cannon ball
+#define CANNON_BALL_RADIUS 0.25
+static const dVector3 xunit = { 1, 0, 0 }, yunit = { 0, 1, 0 }, zpunit = { 0, 0, 1 }, zmunit = { 0, 0, -1 };
+static dGeomID cannon_ball_geom;
+static dBodyID cannon_ball_body;
+static Ogre::SceneNode *cannonBallNode;
+static Ogre::Entity *cannonBall;
+static Ogre::SceneNode *cannonNode;
+static Ogre::Entity *cannonBox;
+static Ogre::SceneNode *cannonBarrelNode;
+static Ogre::Entity *cannonBarrel;
+
+static dGeomID target_geom[3];
+static dBodyID target_body[3];
+static Ogre::SceneNode *targetNode[3];
+static Ogre::Entity *target[3];
+
+static dReal cannon_angle=-0.04,cannon_elevation= -1.55;
+
+bool cannonMode()
+{
+  firstPerson = true;
+  dMass m;
+
+  for(int i = 0; i<3; i++){
+    target_body[i] = dBodyCreate(world);
+    dBodySetPosition(target_body[i], std::rand()%20-10,std::rand()%2+1,std::rand()%20-10);
+    //dBodySetPosition(target_body[i], 5,2,5);
+
+    dMassSetBox (&m,1,5,2,5);
+    dMassAdjust (&m,CMASS);
+    dBodySetMass (target_body[0],&m);
+
+    target_geom[i] = dCreateBox(space,1,1,1);
+    dGeomSetBody(target_geom[i], target_body[i]);
+    //dSpaceAdd(space, target_geom);
+
+  targetNode[i] = smgr->getRootSceneNode()->createChildSceneNode();
+  target[i] = smgr->createEntity("cube.mesh");
+  targetNode[i]->attachObject(target[i]);
+
+  const dReal *boxpos = dBodyGetPosition(target_body[i]);
+  const dReal *boxrot = dBodyGetQuaternion(target_body[i]);
+
+  targetNode[i]->setPosition(boxpos[0], boxpos[1], boxpos[2]);
+  targetNode[i]->setOrientation(boxrot[0], boxrot[1], boxrot[2], boxrot[3]);
+  targetNode[i]->scale(0.01,0.01,0.01);
+}
+
+}
+
+void fireBullet()
+{
+
+  Ogre::Quaternion rotation = cannonNode->getOrientation();
+  Ogre::Quaternion rotation2 = cannonBarrelNode->getOrientation();
+
+  dMatrix3 R2,R3,R4;
+  dRFromAxisAndAngle (R2,0,0,1,cannon_angle);
+  dRFromAxisAndAngle (R3,0,1,0,cannon_elevation);
+  dMultiply0 (R4,R2,R3,3,3,3);
+  dReal cpos[3] = {CANNON_X,CANNON_Z,CANNON_Y};
+  //for (int i=0; i<3; i++) cpos[i] += 3*R4[i*4+2];
+  dBodySetPosition (cannon_ball_body,cpos[0],cpos[1],cpos[2]);
+  dReal force = 8;
+  std::cout<< R4[2] << ":" <<R4[6] << ":" <<R4[10]<< std::endl;
+  dBodySetLinearVel (cannon_ball_body,force*R4[2],force*(-rotation2[3]),force*R4[10]);
+  dBodySetAngularVel (cannon_ball_body,0,0,0);
+
+}
+
 // this is called by dSpaceCollide when two objects in space are
 // potentially colliding.
-
 static void nearCallback (void *data, dGeomID o1, dGeomID o2)
 {
-    int i,n;
+  int i,n;
 
-    // only collide things with the ground
-    int g1 = (o1 == ground || o1 == ground_box);
-    int g2 = (o2 == ground || o2 == ground_box);
-    if (!(g1 ^ g2)) return;
+  // only collide things with the ground
+  int g1 = (o1 == ground || o1 == target_geom[0] || o1 == target_geom[1] || o1 == target_geom[2]);
+  int g2 = (o2 == ground || o2 == target_geom[0] || o2 == target_geom[1] || o2 == target_geom[2]);
+  if (!(g1 ^ g2)) return;
 
-    const int N = 10;
-    dContact contact[N];
-    n = dCollide (o1,o2,N,&contact[0].geom,sizeof(dContact));
-    if (n > 0) {
-        for (i=0; i<n; i++) {
-            contact[i].surface.mode = dContactSlip1 | dContactSlip2 |
-            dContactSoftERP | dContactSoftCFM | dContactApprox1;
-            contact[i].surface.mu = dInfinity;
-            contact[i].surface.slip1 = 0.1;
-            contact[i].surface.slip2 = 0.1;
-            contact[i].surface.soft_erp = 0.5;
-            contact[i].surface.soft_cfm = 0.3;
-            dJointID c = dJointCreateContact (world,contactgroup,&contact[i]);
-            dJointAttach (c,
-                          dGeomGetBody(contact[i].geom.g1),
-                          dGeomGetBody(contact[i].geom.g2));
-        }
-    }
+  if(o2 == target_geom[0] && o1 == cannon_ball_geom) std::cout<<"HIT!\n";
+
+  const int N = 10;
+  dContact contact[N];
+  n = dCollide (o1,o2,N,&contact[0].geom,sizeof(dContact));
+  if (n > 0) {
+      for (i=0; i<n; i++) {
+          contact[i].surface.mode = dContactSlip1 | dContactSlip2 |
+          dContactSoftERP | dContactSoftCFM | dContactApprox1;
+          contact[i].surface.mu = dInfinity;
+          contact[i].surface.slip1 = 0.1;
+          contact[i].surface.slip2 = 0.1;
+          contact[i].surface.soft_erp = 0.5;
+          contact[i].surface.soft_cfm = 0.3;
+          dJointID c = dJointCreateContact (world,contactgroup,&contact[i]);
+          dJointAttach (c,
+                        dGeomGetBody(contact[i].geom.g1),
+                        dGeomGetBody(contact[i].geom.g2));
+      }
+  }
+
 }
 
 
@@ -141,6 +228,26 @@ static void gameLoop() {
     paramList.insert(std::make_pair(std::string("XAutoRepeatOn"), std::string("true")));
 
     im = OIS::InputManager::createInputSystem(paramList);
+
+
+    // Overlay data
+    mainPanel = static_cast<Ogre::OverlayElement*> (overlayMgr->getOverlayElement("CSC-30019/Example3Overlay/MainPanel"));
+    Ogre::TextAreaOverlayElement* title = static_cast<Ogre::TextAreaOverlayElement*> (overlayMgr->getOverlayElement("CSC-30019/Example3Overlay/MainPanel/Title"));
+    title->setCaption("CSC-30019 TicTacToe EXTREME");
+
+    infoText = static_cast<Ogre::TextAreaOverlayElement*> (overlayMgr->getOverlayElement("CSC-30019/Example3Overlay/MainPanel/InfoText"));
+    infoText->setCaption("Turn:");
+
+    infoText2 = static_cast<Ogre::TextAreaOverlayElement*> (overlayMgr->getOverlayElement("CSC-30019/Example3Overlay/MainPanel/InfoText2"));
+    infoText2->setCaption("Make your first move by clicking on any space");
+
+    gameState = static_cast<Ogre::TextAreaOverlayElement*> (overlayMgr->getOverlayElement("CSC-30019/Example3Overlay/MainPanel/GameState"));
+    gameState->setCaption("Game State");
+
+    // The actual overlay
+    overlay = overlayMgr->getByName("CSC-30019/Example3Overlay");
+    overlay->show();
+
 
     //set keyboard input and mouse input
     OIS::Keyboard* keyboard = static_cast<OIS::Keyboard*>(im->createInputObject(OIS::OISKeyboard, true));
@@ -160,7 +267,7 @@ static void gameLoop() {
     Ogre::RaySceneQuery* mSceneQuery;
     mSceneQuery = smgr->createRayQuery(Ogre::Ray());
     mSceneQuery->setSortByDistance(true);
-
+    bool gameFinished = false;
     while( true ) // or until we use the break statement...
     {
 
@@ -168,6 +275,7 @@ static void gameLoop() {
 
         // Required to allow Ogre to pass messages (like Window Closed) to the OS
         Ogre::WindowEventUtilities::messagePump();
+
 
         // Collect some input
         keyboard->capture();
@@ -177,17 +285,43 @@ static void gameLoop() {
         if (keyboard->isKeyDown(OIS::KC_ESCAPE)) break;
         if( keyboard->isKeyDown(OIS::KC_A)) { speed += 0.13; }
         if( keyboard->isKeyDown(OIS::KC_Z)) { speed -= 0.13;}
-        if( keyboard->isKeyDown(OIS::KC_COMMA)) steer -= 0.15;
-        if( keyboard->isKeyDown(OIS::KC_PERIOD)) steer += 0.15;
-        if( keyboard->isKeyDown(OIS::KC_SPACE)) { speed = 0; steer = 0; }
-        if( keyboard->isKeyDown(OIS::KC_UP)) camradius += 0.5;
-        if( keyboard->isKeyDown(OIS::KC_DOWN)) camradius -= 0.5;
-        if( keyboard->isKeyDown(OIS::KC_LEFT)) camangle -= M_PI / 30.0;
-        if( keyboard->isKeyDown(OIS::KC_RIGHT)) camangle += M_PI / 30.0;
-
+        if( keyboard->isKeyDown(OIS::KC_COMMA)) steer -= 0.05;
+        if( keyboard->isKeyDown(OIS::KC_PERIOD)) steer += 0.05;
+        //if( keyboard->isKeyDown(OIS::KC_SPACE)) { speed = 0; steer = 0; }
         if( keyboard->isKeyDown(OIS::KC_F)) { firstPerson = true;}
         if( keyboard->isKeyDown(OIS::KC_T)) { camx = 0.0; camy = 40.75; camz = 0.0; camradius = 2.0; camangle = 0.0; firstPerson = false;}
 
+        if(firstPerson){
+
+          Ogre::Quaternion rotation = cannonNode->getOrientation();
+          Ogre::Quaternion rotation2 = cannonBarrelNode->getOrientation();
+
+          //std::cout<< rotation << std::endl;
+          if( keyboard->isKeyDown(OIS::KC_UP)){
+            cannonBarrelNode->roll(Ogre::Degree(4));
+            cannon_angle=rotation2[3];
+          }
+          if( keyboard->isKeyDown(OIS::KC_DOWN)){
+            cannonBarrelNode->roll(Ogre::Degree(-4));
+            cannon_angle=rotation2[3];
+          }
+          if( keyboard->isKeyDown(OIS::KC_LEFT)){
+            cannonNode->yaw(Ogre::Degree(10));
+            cannon_elevation+= 0.175;//-1.5 + rotation[0]*2;
+          }
+          if( keyboard->isKeyDown(OIS::KC_RIGHT)){
+            cannonNode->yaw(Ogre::Degree(-10));
+            cannon_elevation-= 0.175;//-1.5 + rotation[0]*2;
+          }
+          if( keyboard->isKeyDown(OIS::KC_SPACE)) fireBullet();
+
+
+        } else {
+          if( keyboard->isKeyDown(OIS::KC_UP)) camradius += 0.5;
+          if( keyboard->isKeyDown(OIS::KC_DOWN)) camradius -= 0.5;
+          if( keyboard->isKeyDown(OIS::KC_LEFT)) camangle -= M_PI / 30.0;
+          if( keyboard->isKeyDown(OIS::KC_RIGHT)) camangle += M_PI / 30.0;
+        }
 
         // Work out how much time has elapsed, add to accumulator
         lastTime = currentTime;
@@ -208,109 +342,145 @@ static void gameLoop() {
             accumulator -= frame_length;
         }
 
-        // Look at the origin (0,0,0):
-        // cam->lookAt(Ogre::Vector3(0,0,0));
-
-        // Or look at the buggy instead?
         if(firstPerson){
 
-          Ogre::Vector3 testpos = buggyNode->getPosition();
-          Ogre::Quaternion testrot = buggyNode->_getDerivedOrientation();
+          //camFP->lookAt(buggyNode->getPosition());
+          camFP->lookAt(cannonNode->getPosition());
 
-          //camx = testpos.x - testrot.w * 2; camy=testpos.y ; camz = testpos.z - testrot.y * 2;
-          camx = testpos.x + 3 ; camy=testpos.y ; camz = testpos.z;
+          //camFP->lookAt(Ogre::Vector3(camxFP,0,0));
+          //FPcamNode->setOrientation(camRotXFP, .0 , camRotZFP, .0);
+          //FPcamNode->setPosition(camRotXFP, .0 , camRotZFP);
+          vp->setCamera(camFP);
 
-          //Ogre::Vector3 lookAt = Ogre::Vector3( -atan2(-testrot.y, testrot.w)*180/M_PI, 0, 0);
-          //cam->setDirection(lookAt);
-          //cam->lookAt( lookAt );
-          cam->lookAt( buggyNode->getPosition() );
-          //cam->lookAt(Ogre::Vector3(0,0,0));
         } else {
           // Camera is stuck on a circle on the X-Z plane, camradius from the origin at camangle
-          // x = cos(angle) * r; z = sin(angle)*r;
+          cam->setPosition(Ogre::Vector3(camx,camy,camz));
           camx = cosf(camangle) * camradius;
           camz = sinf(camangle) * camradius;
           cam->lookAt( buggyNode->getPosition() );
+          vp->setCamera(cam);
+
         }
 
-        cam->setPosition(Ogre::Vector3(camx,camy,camz));
+        if(!gameFinished){
+
+          if(firstPerson)
+          {
+            static int countz = 0;
+
+
+            countz++;
+            if(countz >(600) ){
+              std::cout<< "END CANNON MODE" << std::endl;
+              firstPerson = false;
+            }
+
+
+          } else {
 
         /*
         *  Ray tracing code for mouse pointer
         */
         //if the mouse is clicked
-        if( mouse->getMouseState().buttonDown(OIS::MB_Left) ){
-           std::cout<<"MOUSE CLICK\n";
+            static bool mouseReleased = true;
+            if( !mouse->getMouseState().buttonDown(OIS::MB_Left) ){
+              mouseReleased = true;
+            }
 
-          // Get normalised mouse coordinates
-          float sc_x = (float) state.X.abs / vp->getActualWidth();
-          float sc_y = (float) state.Y.abs / vp->getActualHeight();
+            if( mouseReleased && mouse->getMouseState().buttonDown(OIS::MB_Left) ){
 
-          // Create a ray using the mouse coordinates
-          Ogre::Ray pick_ray = cam->getCameraToViewportRay(sc_x, sc_y);
+              mouseReleased = false;
+               std::cout<<"MOUSE CLICK\n";
 
-          // Give the scene query the ray
-          mSceneQuery->setRay(pick_ray);
+              // Get normalised mouse coordinates
+              float sc_x = (float) state.X.abs / vp->getActualWidth();
+              float sc_y = (float) state.Y.abs / vp->getActualHeight();
 
-          // Execute the scene query
-          Ogre::RaySceneQueryResult& result = mSceneQuery->execute();
+              // Create a ray using the mouse coordinates
+              Ogre::Ray pick_ray = cam->getCameraToViewportRay(sc_x, sc_y);
 
-          // If we had a hit in the ray query, get the entity from the first result
-          // (there may be more than one) and set it to a "selected" material:
-          if( !result.empty() )
-          {
-            for(int j = 0; j<9; j++){
-              for(int i = 0; i<9; i++){
-                if((result[0].movable)->getParentSceneNode() == mb->spaces[j]->spaces[i]->OgreNode) //->movable->getName().compare("Ogre/MO1") == 0)
-                {
-                  mb->spaces[j]->spaces[i]->OgreNode->showBoundingBox(true);
+              // Give the scene query the ray
+              mSceneQuery->setRay(pick_ray);
 
-                  std::cout<< "It is " << turn->getName() <<"'s turn!" << std::endl;
+              // Execute the scene query
+              Ogre::RaySceneQueryResult& result = mSceneQuery->execute();
 
-                  if( mb->makeMove(turn,j,i, lastMove) )
-                  {
-                    //change turn for the next round
-                    if(turn == p1){
-                    mb->spaces[j]->spaces[i]->OgreEntity->setMaterialName( "CSC-30019/Space1");//"CSC-30019/Tile1-Selected");
+              // If we had a hit in the ray query, get the entity from the first result
+              // (there may be more than one) and set it to a "selected" material:
+              if( !result.empty() )
+              {
+                mainPanel->setMaterialName("CSC-30019/PlainBlue");
+                if( state.X.abs >= 10 && state.X.abs < 510 && state.Y.abs >=10 && state.Y.abs < 80 ){
 
-                      if( mb->spaces[j]->checkBoard() )
-                      {
-                          mb->spaces[j]->OgreEntity->setMaterialName( "CSC-30019/Space1");
-                          if( mb->checkBoard() ) exit(1);
-                      }
-
-                      turn = p2;
-                    }
-                    else if(turn == p2){
-                    mb->spaces[j]->spaces[i]->OgreEntity->setMaterialName( "CSC-30019/Space2");//"CSC-30019/Tile1-Selected");
-
-                      if( mb->spaces[j]->checkBoard() )
-                      {
-                          mb->spaces[j]->OgreEntity->setMaterialName( "CSC-30019/Space2");
-                          if( mb->checkBoard() ) exit(1);
-                      }
-                      turn = p1;
-
-                    }
-
-                    lastMove = i;
+                    mainPanel->setMaterialName("CSC-30019/PlainGreen");
 
                   }
+                  else {
 
-                  mb->printBoard();
 
-                } else {
-                  mb->spaces[j]->spaces[i]->OgreNode->showBoundingBox(false);
+                    for(int j = 0; j<9; j++){
+                      for(int i = 0; i<9; i++){
+                        if((result[0].movable)->getParentSceneNode() == mb->spaces[j]->spaces[i]->OgreNode) //->movable->getName().compare("Ogre/MO1") == 0)
+                        {
+                          mb->spaces[j]->spaces[i]->OgreNode->showBoundingBox(true);
 
-                }//end if a board space object
-              }//end for loop for space
-            }//end for loop for board
-          }//end if not empty
+                          std::cout<< "It is " << turn->getName() <<"'s turn!" << std::endl;
 
-          std::cout<< "It is " << turn->getName() <<"'s turn!" << std::endl;
+                          if( mb->makeMove(turn,j,i, lastMove) )
+                          {
+                            if(std::rand()> 0 ){
+                              cannonMode();
+                            }
 
-        }//end if click
+                            //change turn for the next round
+                            if(turn == p1){
+                            mb->spaces[j]->spaces[i]->OgreEntity->setMaterialName( "CSC-30019/Space1");//"CSC-30019/Tile1-Selected");
 
+                              if( mb->spaces[j]->checkBoard() )
+                              {
+
+                                  mb->spaces[j]->OgreEntity->setMaterialName( "CSC-30019/Space1");
+                                  if( mb->checkBoard() ){
+                                      mainPanel->setMaterialName("CSC-30019/PlainGreen");
+                                     gameFinished = true;
+                                   }
+                              }
+
+                              turn = p2;
+                            }
+                            else if(turn == p2){
+                            mb->spaces[j]->spaces[i]->OgreEntity->setMaterialName( "CSC-30019/Space2");//"CSC-30019/Tile1-Selected");
+
+                              if( mb->spaces[j]->checkBoard() )
+                              {
+                                  mb->spaces[j]->OgreEntity->setMaterialName( "CSC-30019/Space2");
+                                  if( mb->checkBoard() ) gameFinished = true;
+                              }
+                              turn = p1;
+
+                            }
+
+                            lastMove = i;
+
+                          }
+
+                          mb->printBoard();
+
+                        } else {
+                          mb->spaces[j]->spaces[i]->OgreNode->showBoundingBox(false);
+
+                        }//end if a board space object
+                      }//end for loop for space
+                    }//end for loop for board
+                  }//end if overlay clicked
+              }//end if not empty
+
+              std::cout<< "It is " << turn->getName() <<"'s turn!" << std::endl;
+              infoText->setCaption("It is " + std::string( turn->getName() ) + "'s turn!");
+
+            }//end if click
+      }
+}//end if game not finished loop
         // renderOneFrame returns false if it fails, so we will bail in that case.
         if(root->renderOneFrame() == false)
             break;
@@ -342,6 +512,7 @@ static void simLoop (int pause)
         dJointSetHinge2Param (joint[i],dParamVel2,-speed);
         dJointSetHinge2Param (joint[i],dParamFMax2,0.1);
 
+
         // steering
         dReal v = steer - dJointGetHinge2Angle1 (joint[i]);
         if (v > 0.1) v = 0.1;
@@ -367,11 +538,11 @@ static void simLoop (int pause)
     buggyNode->setPosition( boxpos[0], boxpos[1], boxpos[2] );
     buggyNode->setOrientation( boxrot[0], boxrot[1], boxrot[2], boxrot[3]);
 
-    const dReal *gbpos = dGeomGetPosition(ground_box);
-    dReal gbrot[4];  dGeomGetQuaternion(ground_box,gbrot);
 
-    groundBoxNode->setPosition(gbpos[0],gbpos[1],gbpos[2]);
-    groundBoxNode->setOrientation( gbrot[0], gbrot[1], gbrot[2], gbrot[3]);
+    buggyNode->setPosition( boxpos[0], boxpos[1], boxpos[2] );
+    buggyNode->setOrientation( boxrot[0], boxrot[1], boxrot[2], boxrot[3]);
+    //buggyNode->yaw(Ogre::Degree(-90));
+
 
     const dReal *w1pos = dBodyGetPosition(body[1]);
     const dReal *w1rot = dBodyGetQuaternion(body[1]);
@@ -397,6 +568,33 @@ static void simLoop (int pause)
     wheel4node->setPosition(w4pos[0], w4pos[1], w4pos[2]);
     wheel4node->setOrientation(w4rot[0], w4rot[1], w4rot[2], w4rot[3]);
 
+
+    // draw the cannon
+    Ogre::Quaternion rotation = cannonNode->getOrientation();
+
+    Ogre::Quaternion rotation2 = cannonBarrelNode->getOrientation();
+
+  	dReal cpos[3] = {CANNON_X,CANNON_Z,CANNON_Y};
+
+    cannonNode->setPosition(cpos[0], cpos[1], cpos[2]);
+    cannonBarrelNode->setPosition(cpos[0], cpos[1]+50, cpos[2]);
+  	//draw the cannon ball
+    const dReal *Ballpos = dBodyGetPosition(cannon_ball_body);
+    //const dReal *Ballrot = dBodyGetQuaternion(cannon_ball_body);
+
+    cannonBallNode->setPosition(Ballpos[0], Ballpos[1], Ballpos[2]);
+    //cannonBallNode->setOrientation(Ballrot[0], Ballrot[1], Ballrot[2], Ballrot[3] );
+
+    if(firstPerson){
+      for(int h =0; h<3; h++){
+      const dReal *Tpos = dBodyGetPosition(target_body[h]);
+      const dReal *Trot = dBodyGetQuaternion(target_body[h]);
+
+      targetNode[h]->setPosition(Tpos[0], Tpos[1], Tpos[2]);
+      targetNode[h]->setOrientation(Trot[0], Trot[1], Trot[2], Trot[3]);
+      }
+    }
+
 }
 
 
@@ -417,6 +615,7 @@ int main (int argc, char **argv)
     dWorldSetGravity (world,0,-0.5,0);
     ground = dCreatePlane (space,0,1,0,0);
 
+    int offset = 6;
     // chassis body
     body[0] = dBodyCreate (world);
     dBodySetPosition (body[0],0,STARTZ,0);
@@ -476,52 +675,24 @@ int main (int argc, char **argv)
     dSpaceAdd (car_space,sphere[2]);
     dSpaceAdd (car_space,sphere[3]);
 
+    //create cannon
+    cannon_ball_body = dBodyCreate (world);
+  	cannon_ball_geom = dCreateSphere (space,CANNON_BALL_RADIUS);
+  	dMassSetSphereTotal (&m,CANNON_BALL_MASS,CANNON_BALL_RADIUS);
+  	dBodySetMass (cannon_ball_body,&m);
+  	dGeomSetBody (cannon_ball_geom,cannon_ball_body);
+  	dBodySetPosition (cannon_ball_body,CANNON_X,CANNON_Z,CANNON_Y);
+
     // environment
-    ground_box = dCreateBox (space,2,1,1.5);
-    dMatrix3 R;
-    dRFromAxisAndAngle (R,0,0,1,-0.15);
-    dGeomSetPosition (ground_box,-2,-0.34,0);
-    dGeomSetRotation (ground_box,R);
+//    dMatrix3 R;
+  //  dRFromAxisAndAngle (R,0,0,1,-0.15);
+    //dGeomSetRotation (ground_box,R);
 
 
     //create the board
     //game initialise
     mb = new MainBoard();
 
-    //mb->setPosition( 0, 0, 0, 0);
-/*
-    int countT = 0;
-    double marginT = 2;
-
-    for(int f =0; f < 9; f++){
-
-      int xT = f%3;
-      int yT = countT;
-
-      if(xT==2) countT++;
-
-
-      int count = 0;
-      double margin = 2;
-
-      //Board::setPosition
-      //mb->spaces[f].setPosition( xT, 0, yT, marginT);
-
-      for(int i =0; i< 9 ; i++){
-
-        int x = i%3;
-        int y = count;
-
-        if(x==2) count++;
-
-        x = x + xT;
-        y = y + yT;
-
-        mb->spaces[f].spaces[i].setPosition( x+((xT)+(xT-2)*marginT), 0, y +((yT) + (yT-2) *marginT), margin);
-
-      }
-    }
-*/
 
     // Set the scene
     window->getCustomAttribute("WINDOW", &windowHnd);
@@ -533,20 +704,28 @@ int main (int argc, char **argv)
     vp = window->addViewport(cam); //use for ray tracing from camera view
     cam->setAspectRatio(Ogre::Real(vp->getActualWidth()) / Ogre::Real(vp->getActualHeight()) );
 
+
     // SKYBOX
-    smgr->setSkyBox(true, "CSC-30019/TrippySkyBox");
+    smgr->setSkyBox(true, "CSC-30019/CloudsSkyBox");
 
 
     // Nodes for the buggy and the angled box in the ground
     buggyNode = smgr->getRootSceneNode()->createChildSceneNode("buggynode");
-    groundBoxNode = smgr->getRootSceneNode()->createChildSceneNode("groundboxnode");
 
 
     // Entities for the various bits we are displaying
-    Ogre::Entity *ent = smgr->createEntity("buggy", "cube.mesh");
-    Ogre::Entity *gbent = smgr->createEntity("groundbox", "cube.mesh");
+    Ogre::Entity *ent = smgr->createEntity("buggy", "cube.mesh");//"RZR-002.mesh
 
-    //char ids[9] = {'1','2','3','4','5','6','7','8','9'};
+    buggyNode->showBoundingBox(true);
+    buggyNode->attachObject(ent);
+    buggyNode->scale(0.01*(LENGTH),0.01*(HEIGHT),0.01*(WIDTH));
+    //buggyNode->roll( Ogre::Degree(-90) );
+    // 0.01 originally
+
+
+    ent->setMaterialName("CSC-30019/PlainRed");
+
+
     Ogre::Entity *spacest[9];
     for(int i =0; i<9; i++){
        spacest[i]= smgr->createEntity("cube.mesh");
@@ -556,10 +735,6 @@ int main (int argc, char **argv)
     Ogre::Entity *wheel2 = smgr->createEntity("wheel2", "sphere.mesh");
     Ogre::Entity *wheel3 = smgr->createEntity("wheel3", "sphere.mesh");
     Ogre::Entity *wheel4 = smgr->createEntity("wheel4", "sphere.mesh");
-
-    //gbent->setMaterial(mp);
-    buggyNode->attachObject(ent);// buggyNode->attachObject(cam);
-    buggyNode->scale(0.01*(LENGTH),0.01*(HEIGHT),0.01*(WIDTH));
 
     wheel1node = smgr->getRootSceneNode()->createChildSceneNode("wheel1node");
     wheel1node->attachObject(wheel1);
@@ -578,15 +753,34 @@ int main (int argc, char **argv)
     wheel4node->scale(0.002,0.0005,0.002);
     wheel4node->setPosition(-0.5*LENGTH,STARTZ-HEIGHT*0.5,0);
 
+    //cannon
+    cannonNode = smgr->getRootSceneNode()->createChildSceneNode();
+    cannonBox = smgr->createEntity("cube.mesh");
+    cannonNode->attachObject(cannonBox);
+    cannonNode->scale(0.002,0.002,0.002);
 
-    ent->setMaterialName("CSC-30019/Tile1");
+    cannonBarrelNode = cannonNode->createChildSceneNode();
+    cannonBarrel = smgr->createEntity("cube.mesh");
+    cannonBarrelNode->scale(2,0.2,0.2);
+    cannonBarrelNode->attachObject(cannonBarrel);
+    //cannonBarrelNode->scale(0.01,0.01,0.01);
 
-    gbent->setMaterialName("CSC-30019/Tile2");
-    groundBoxNode->attachObject(gbent);
-    groundBoxNode->scale(0.02,.01,.015);
+    cannonBallNode = smgr->getRootSceneNode()->createChildSceneNode();
+    cannonBall = smgr->createEntity("sphere.mesh");
+    cannonBallNode->attachObject(cannonBall);
+    cannonBallNode->scale(0.001,0.001,0.001);
 
-    //set spaces texture
 
+    //cannon
+
+    camFP = smgr->createCamera("CameraFP");
+    camFP->setNearClipDistance(0.2);
+    camFP->setAspectRatio(Ogre::Real(vp->getActualWidth()) / Ogre::Real(vp->getActualHeight()) );
+
+    FPcamNode = cannonNode->createChildSceneNode("FPcamNode");
+    FPcamNode->scale(0.0001,0.0001,0.0001);
+    FPcamNode->setPosition(400,100,0);
+    FPcamNode->attachObject(camFP);
 
     // Set the ambient lighting in the scene
     smgr->setAmbientLight(Ogre::ColourValue(0.3,0.3,0.4));
@@ -595,19 +789,23 @@ int main (int argc, char **argv)
     Ogre:: Light *dirLight = smgr->createLight("dir_light");
     dirLight->setType(Ogre::Light::LT_DIRECTIONAL );
     dirLight->setDirection(Ogre::Vector3(0.707,-.707,0));
-    dirLight->setDiffuseColour(1.0,1.0,1.0);
+    dirLight->setDiffuseColour(0.8,0.8,0.8);
 
     // Shadows have to be enabled though
     smgr->setShadowTechnique(Ogre::SHADOWTYPE_STENCIL_ADDITIVE);
 
 
     //WRAP IN TRY CATCH TO VALIDATE USER INPUT
+    /*
       char n1[15], n2[15];
       std::cout<<"Enter player 1 name: ";
       std::cin >> n1;
       std::cout<<"Enter player 2 name: ";
       std::cin>> n2;
+
       setPlayers(n1, n2);
+      */
+      setPlayers("player1", "player2");
 
     // render a frame for good measure
     root->renderOneFrame();
@@ -662,12 +860,19 @@ void initialise()
         }
     }
 
-    Ogre::ResourceGroupManager::getSingleton().initialiseAllResourceGroups();
 
     window = root->initialise(true);
 
-    std::cout << "-------- \n"<< smgr << std::endl;
     smgr = root->createSceneManager(Ogre::ST_GENERIC);
-    std::cout << "-------- \n"<< smgr << std::endl;
+
+    // The basic Overlay system need to be initialised *before* resource groups!
+    Ogre::OverlaySystem * overlaySystem = new Ogre::OverlaySystem;
+    overlayMgr = Ogre::OverlayManager::getSingletonPtr();
+
+    Ogre::ResourceGroupManager::getSingleton().initialiseAllResourceGroups();
+
+    // Add the overlay system to the scene manager's render queue
+    smgr->addRenderQueueListener( overlaySystem );
+
 
 }
