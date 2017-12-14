@@ -1,19 +1,3 @@
-/* buggyogre.cpp
- * -------------
- *
- * This file is the ODE buggy demo, rewritten to use OGRE to display
- * its graphics instead of DrawStuff.
- *
- * The principal changes to the ODE part are just in rearranging the
- * axes so Y is up rather than Z; this is what OGRE expects and ODE
- * is axes-independent.
- *
- * Quaternions (four value descriptions of rotations) are used to pass
- * orientation information from ODE to OGRE. (W, X, Y, Z).
- *
- * Normal 3-vectors are used for position (X, Y, Z).
- *
- */
 
 //local files
 #include "t2.h"
@@ -74,6 +58,7 @@ void initialise();
 static void simLoop(int pause);
 void fireBullet();
 bool cannonMode();
+bool destroyTargets();
 
 // some constants
 #define LENGTH 0.7	// chassis length
@@ -92,12 +77,8 @@ static dWorldID world;
 dSpaceID space;
 
 static dBodyID body[6]; //previously 5
-static dJointID joint[4];	// joint[0] is the front wheel
 static dJointGroupID contactgroup;
 static dGeomID ground;
-static dSpaceID car_space;
-static dGeomID box[1];
-static dGeomID sphere[4];
 static dGeomID spaces[9];
 
 // things that the user controls
@@ -125,16 +106,37 @@ static dBodyID target_body[3];
 static Ogre::SceneNode *targetNode[3];
 static Ogre::Entity *target[3];
 
+static bool targetsHit = false;
+static int cannonPosX = 0;
+static int cannonPosY = 0;
+
+static bool t1 = false;
+static bool t2 = false;
+static bool t3 = false;
+
 static dReal cannon_angle=-0.04,cannon_elevation= -1.55;
 
-bool cannonMode()
+bool destroyTargets()
 {
-  firstPerson = true;
-  dMass m;
+  cannonNode->setVisible(false);
 
   for(int i = 0; i<3; i++){
+    dBodyDestroy(target_body[i]);
+    smgr->destroySceneNode(targetNode[i]);
+  }
+}
+bool cannonMode()
+{
+  infoText2->setCaption("CANNON MODE - shoot the enemies to claim that space!");
+  cannonNode->setVisible(true);
+
+  dMass m;
+
+
+  for(int i = 0; i<3; i++){
+
     target_body[i] = dBodyCreate(world);
-    dBodySetPosition(target_body[i], std::rand()%20-10,std::rand()%2+1,std::rand()%20-10);
+    dBodySetPosition(target_body[i], std::rand()%20-10+(cannonPosX),std::rand()%2+1,std::rand()%20-10+(cannonPosY));
     //dBodySetPosition(target_body[i], 5,2,5);
 
     dMassSetBox (&m,1,5,2,5);
@@ -143,19 +145,22 @@ bool cannonMode()
 
     target_geom[i] = dCreateBox(space,1,1,1);
     dGeomSetBody(target_geom[i], target_body[i]);
-    //dSpaceAdd(space, target_geom);
 
-  targetNode[i] = smgr->getRootSceneNode()->createChildSceneNode();
-  target[i] = smgr->createEntity("cube.mesh");
-  targetNode[i]->attachObject(target[i]);
+    targetNode[i] = smgr->getRootSceneNode()->createChildSceneNode();
+    target[i] = smgr->createEntity("robot.mesh");
+    //target[i]->setMaterialName("CSC-30019/PlainGreen");
+    targetNode[i]->attachObject(target[i]);
 
-  const dReal *boxpos = dBodyGetPosition(target_body[i]);
-  const dReal *boxrot = dBodyGetQuaternion(target_body[i]);
+    const dReal *boxpos = dBodyGetPosition(target_body[i]);
+    const dReal *boxrot = dBodyGetQuaternion(target_body[i]);
 
-  targetNode[i]->setPosition(boxpos[0], boxpos[1], boxpos[2]);
-  targetNode[i]->setOrientation(boxrot[0], boxrot[1], boxrot[2], boxrot[3]);
-  targetNode[i]->scale(0.01,0.01,0.01);
-}
+    targetNode[i]->setPosition(boxpos[0], boxpos[1], boxpos[2]);
+    targetNode[i]->setOrientation(boxrot[0], boxrot[1], boxrot[2], boxrot[3]);
+    targetNode[i]->scale(0.02,0.02,0.02);
+
+  }
+
+  firstPerson = true;
 
 }
 
@@ -169,11 +174,11 @@ void fireBullet()
   dRFromAxisAndAngle (R2,0,0,1,cannon_angle);
   dRFromAxisAndAngle (R3,0,1,0,cannon_elevation);
   dMultiply0 (R4,R2,R3,3,3,3);
-  dReal cpos[3] = {CANNON_X,CANNON_Z,CANNON_Y};
-  //for (int i=0; i<3; i++) cpos[i] += 3*R4[i*4+2];
+  dReal cpos[3] = {cannonPosX,CANNON_Z,cannonPosY};
+
   dBodySetPosition (cannon_ball_body,cpos[0],cpos[1],cpos[2]);
   dReal force = 8;
-  std::cout<< R4[2] << ":" <<R4[6] << ":" <<R4[10]<< std::endl;
+
   dBodySetLinearVel (cannon_ball_body,force*R4[2],force*(-rotation2[3]),force*R4[10]);
   dBodySetAngularVel (cannon_ball_body,0,0,0);
 
@@ -185,14 +190,31 @@ static void nearCallback (void *data, dGeomID o1, dGeomID o2)
 {
   int i,n;
 
-  // only collide things with the ground
+  // only collide things with the ground and targets
   int g1 = (o1 == ground || o1 == target_geom[0] || o1 == target_geom[1] || o1 == target_geom[2]);
   int g2 = (o2 == ground || o2 == target_geom[0] || o2 == target_geom[1] || o2 == target_geom[2]);
   if (!(g1 ^ g2)) return;
 
-  if(o2 == target_geom[0] && o1 == cannon_ball_geom) std::cout<<"HIT!\n";
+  /*
 
-  const int N = 10;
+  NEEDS WORK!!!!!
+  */
+  if(firstPerson){
+
+  if(o2 == target_geom[0] && o1 == cannon_ball_geom)
+  {
+    t1=true;
+  }
+  if(o2 == target_geom[1] && o1 == cannon_ball_geom)  {
+      t2=true;
+    }
+  if(o2 == target_geom[2] && o1 == cannon_ball_geom)   {
+      t3=true;
+    }
+
+}
+
+  const int N = 4;
   dContact contact[N];
   n = dCollide (o1,o2,N,&contact[0].geom,sizeof(dContact));
   if (n > 0) {
@@ -233,7 +255,7 @@ static void gameLoop() {
     // Overlay data
     mainPanel = static_cast<Ogre::OverlayElement*> (overlayMgr->getOverlayElement("CSC-30019/Example3Overlay/MainPanel"));
     Ogre::TextAreaOverlayElement* title = static_cast<Ogre::TextAreaOverlayElement*> (overlayMgr->getOverlayElement("CSC-30019/Example3Overlay/MainPanel/Title"));
-    title->setCaption("CSC-30019 TicTacToe EXTREME");
+    title->setCaption("CSC-30019 TicTacToe UNIVERSE");
 
     infoText = static_cast<Ogre::TextAreaOverlayElement*> (overlayMgr->getOverlayElement("CSC-30019/Example3Overlay/MainPanel/InfoText"));
     infoText->setCaption("Turn:");
@@ -288,8 +310,8 @@ static void gameLoop() {
         if( keyboard->isKeyDown(OIS::KC_COMMA)) steer -= 0.05;
         if( keyboard->isKeyDown(OIS::KC_PERIOD)) steer += 0.05;
         //if( keyboard->isKeyDown(OIS::KC_SPACE)) { speed = 0; steer = 0; }
-        if( keyboard->isKeyDown(OIS::KC_F)) { firstPerson = true;}
-        if( keyboard->isKeyDown(OIS::KC_T)) { camx = 0.0; camy = 40.75; camz = 0.0; camradius = 2.0; camangle = 0.0; firstPerson = false;}
+        //if( keyboard->isKeyDown(OIS::KC_F)) { firstPerson = true;}
+        if( keyboard->isKeyDown(OIS::KC_T)) { camx = 0.0; camy = 40.75; camz = 0.0; camradius = 2.0; camangle = 0.0;}
 
         if(firstPerson){
 
@@ -357,7 +379,7 @@ static void gameLoop() {
           cam->setPosition(Ogre::Vector3(camx,camy,camz));
           camx = cosf(camangle) * camradius;
           camz = sinf(camangle) * camradius;
-          cam->lookAt( buggyNode->getPosition() );
+          cam->lookAt( Ogre::Vector3(0,0,0) );
           vp->setCamera(cam);
 
         }
@@ -366,14 +388,41 @@ static void gameLoop() {
 
           if(firstPerson)
           {
+            /*
+
+            NEEDS WORK!!!!!
+            */
             static int countz = 0;
 
-
-            countz++;
-            if(countz >(600) ){
-              std::cout<< "END CANNON MODE" << std::endl;
+            if(t1 && t2 && t3){
+              std::cout<<"COMPLETED"<<std::endl;
+              infoText2->setCaption("CONGRATULATIONS you defeated the enemies!");
+              destroyTargets();
+              t1 = false;
+              t2=false;
+              t3=false;
+              countz = 0;
               firstPerson = false;
+            } else{
+
+              countz++;
+
+              if(countz >(300) ){
+                infoText2->setCaption("OH DEAR! you ran out of time and lost that space!");
+                std::cout<< "END CANNON MODE" << std::endl;
+                destroyTargets();
+                t1 = false;
+                t2=false;
+                t3=false;
+                countz = 0;
+                mb->spaces[boardNo]->spaces[spaceNo]->state = NULL;
+                mb->spaces[boardNo]->state == NULL;
+                mb->spaces[boardNo]->spaces[spaceNo]->OgreEntity->setMaterialName( "CSC-30019/Tile1");//"CSC-30019/Tile1-Selected");
+                mb->spaces[boardNo]->OgreEntity->setMaterialName( "CSC-30019/Galaxy");//"CSC-30019/Tile1-Selected");
+
+                firstPerson = false;
             }
+          }
 
 
           } else {
@@ -428,35 +477,59 @@ static void gameLoop() {
 
                           if( mb->makeMove(turn,j,i, lastMove) )
                           {
-                            if(std::rand()> 0 ){
+                            /*
+
+                            NEEDS WORK!!!!!
+                            */
+                            mb->spaces[spaceNo]->OgreNode->showBoundingBox(false);
+                            boardNo = j;
+                            spaceNo = i;
+                            mb->spaces[spaceNo]->OgreNode->showBoundingBox(true);
+
+                            int randomV = std::rand()%10;
+                            std::cout<< randomV << std::endl;
+                            if(randomV < 3){
+                              const dReal *boardPos = dGeomGetPosition(mb->spaces[j]->spaces[i]->ODEgeomID);
+                              cannonPosX = boardPos[0];
+                              cannonPosY = boardPos[1];
+                              boardNo = j;
+                              spaceNo = i;
                               cannonMode();
                             }
 
                             //change turn for the next round
                             if(turn == p1){
-                            mb->spaces[j]->spaces[i]->OgreEntity->setMaterialName( "CSC-30019/Space1");//"CSC-30019/Tile1-Selected");
 
+                            mb->spaces[j]->spaces[i]->OgreEntity->setMaterialName( "CSC-30019/Space1");//"CSC-30019/Tile1-Selected");
+                            //mb->spaces[j]->spaces[i]->OgreNode->attatchObject(smgr->createLight() );
                               if( mb->spaces[j]->checkBoard() )
                               {
 
-                                  mb->spaces[j]->OgreEntity->setMaterialName( "CSC-30019/Space1");
+                                  mb->spaces[j]->OgreEntity->setMaterialName( "CSC-30019/GalaxyGreen");
                                   if( mb->checkBoard() ){
                                       mainPanel->setMaterialName("CSC-30019/PlainGreen");
-                                     gameFinished = true;
+                                     gameFinished = true; break;
                                    }
                               }
 
                               turn = p2;
+                              mainPanel->setMaterialName("CSC-30019/PlainBlue");
+
                             }
                             else if(turn == p2){
                             mb->spaces[j]->spaces[i]->OgreEntity->setMaterialName( "CSC-30019/Space2");//"CSC-30019/Tile1-Selected");
+                          //mb->spaces[j]->spaces[i]->OgreNode->attatchObject(smgr->createLight() );
 
                               if( mb->spaces[j]->checkBoard() )
                               {
-                                  mb->spaces[j]->OgreEntity->setMaterialName( "CSC-30019/Space2");
-                                  if( mb->checkBoard() ) gameFinished = true;
+                                  mb->spaces[j]->OgreEntity->setMaterialName( "CSC-30019/GalaxyBlue");
+                                  if( mb->checkBoard() ){
+                                      mainPanel->setMaterialName("CSC-30019/PlainBlue");
+                                     gameFinished = true; break;
+                                   }
                               }
                               turn = p1;
+                              mainPanel->setMaterialName("CSC-30019/PlainGreen");
 
                             }
 
@@ -507,74 +580,22 @@ static void simLoop (int pause)
     int i;
 
     if (!pause) {
-      for(int i = 0; i < 2; i++){
-        // motor
-        dJointSetHinge2Param (joint[i],dParamVel2,-speed);
-        dJointSetHinge2Param (joint[i],dParamFMax2,0.1);
 
-
-        // steering
-        dReal v = steer - dJointGetHinge2Angle1 (joint[i]);
-        if (v > 0.1) v = 0.1;
-        if (v < -0.1) v = -0.1;
-        v *= 10.0;
-        dJointSetHinge2Param (joint[i],dParamVel,v);
-        dJointSetHinge2Param (joint[i],dParamFMax,0.2);
-        dJointSetHinge2Param (joint[i],dParamLoStop,-0.75);
-        dJointSetHinge2Param (joint[i],dParamHiStop,0.75);
-        dJointSetHinge2Param (joint[i],dParamFudgeFactor,0.1);
-      }
         dSpaceCollide (space,0,&nearCallback);
         dWorldStep (world,0.05);
 
         // remove all contact joints
-        dJointGroupEmpty (contactgroup);
+        dJointGroupEmpty(contactgroup);
     }
 
     // GET POSITIONS OF EVERYTHING FROM PHYSICS, UPDATE GRAPHICS
-    const dReal *boxpos = dBodyGetPosition(body[0]);
-    const dReal *boxrot = dBodyGetQuaternion(body[0]);
-
-    buggyNode->setPosition( boxpos[0], boxpos[1], boxpos[2] );
-    buggyNode->setOrientation( boxrot[0], boxrot[1], boxrot[2], boxrot[3]);
-
-
-    buggyNode->setPosition( boxpos[0], boxpos[1], boxpos[2] );
-    buggyNode->setOrientation( boxrot[0], boxrot[1], boxrot[2], boxrot[3]);
-    //buggyNode->yaw(Ogre::Degree(-90));
-
-
-    const dReal *w1pos = dBodyGetPosition(body[1]);
-    const dReal *w1rot = dBodyGetQuaternion(body[1]);
-
-    wheel1node->setPosition(w1pos[0],w1pos[1],w1pos[2]);
-    wheel1node->setOrientation(w1rot[0],w1rot[1],w1rot[2],w1rot[3]);
-
-    const dReal *w2pos = dBodyGetPosition(body[2]);
-    const dReal *w2rot = dBodyGetQuaternion(body[2]);
-
-    wheel2node->setPosition(w2pos[0], w2pos[1], w2pos[2]);
-    wheel2node->setOrientation(w2rot[0], w2rot[1], w2rot[2], w2rot[3]);
-
-    const dReal *w3pos = dBodyGetPosition(body[3]);
-    const dReal *w3rot = dBodyGetQuaternion(body[3]);
-
-    wheel3node->setPosition(w3pos[0], w3pos[1], w3pos[2]);
-    wheel3node->setOrientation(w3rot[0], w3rot[1], w3rot[2], w3rot[3]);
-
-    const dReal *w4pos = dBodyGetPosition(body[4]);
-    const dReal *w4rot = dBodyGetQuaternion(body[4]);
-
-    wheel4node->setPosition(w4pos[0], w4pos[1], w4pos[2]);
-    wheel4node->setOrientation(w4rot[0], w4rot[1], w4rot[2], w4rot[3]);
-
 
     // draw the cannon
     Ogre::Quaternion rotation = cannonNode->getOrientation();
 
     Ogre::Quaternion rotation2 = cannonBarrelNode->getOrientation();
 
-  	dReal cpos[3] = {CANNON_X,CANNON_Z,CANNON_Y};
+  	dReal cpos[3] = {cannonPosX,CANNON_Z,cannonPosY};
 
     cannonNode->setPosition(cpos[0], cpos[1], cpos[2]);
     cannonBarrelNode->setPosition(cpos[0], cpos[1]+50, cpos[2]);
@@ -590,7 +611,7 @@ static void simLoop (int pause)
       const dReal *Tpos = dBodyGetPosition(target_body[h]);
       const dReal *Trot = dBodyGetQuaternion(target_body[h]);
 
-      targetNode[h]->setPosition(Tpos[0], Tpos[1], Tpos[2]);
+      targetNode[h]->setPosition(Tpos[0], Tpos[1]-1, Tpos[2]);
       targetNode[h]->setOrientation(Trot[0], Trot[1], Trot[2], Trot[3]);
       }
     }
@@ -614,66 +635,6 @@ int main (int argc, char **argv)
     contactgroup = dJointGroupCreate (0);
     dWorldSetGravity (world,0,-0.5,0);
     ground = dCreatePlane (space,0,1,0,0);
-
-    int offset = 6;
-    // chassis body
-    body[0] = dBodyCreate (world);
-    dBodySetPosition (body[0],0,STARTZ,0);
-    dMassSetBox (&m,1,LENGTH,HEIGHT,WIDTH);
-    dMassAdjust (&m,CMASS);
-    dBodySetMass (body[0],&m);
-    box[0] = dCreateBox (0,LENGTH,HEIGHT,WIDTH);
-    dGeomSetBody (box[0],body[0]);
-
-    // wheel bodies
-    for (i=1; i<=4; i++) {
-        body[i] = dBodyCreate (world);
-        dQuaternion q;
-        dQFromAxisAndAngle (q,1,0,0,M_PI*0.5);
-        dBodySetQuaternion (body[i],q);
-        dMassSetSphere (&m,1,RADIUS);
-        dMassAdjust (&m,WMASS);
-        dBodySetMass (body[i],&m);
-        sphere[i-1] = dCreateSphere (0,RADIUS);
-        dGeomSetBody (sphere[i-1],body[i]);
-    }
-    dBodySetPosition (body[1],-0.5*LENGTH,STARTZ-HEIGHT*0.5,WIDTH*0.5);
-    dBodySetPosition (body[2],-0.5*LENGTH,STARTZ-HEIGHT*0.5,-WIDTH*0.5);
-    dBodySetPosition (body[3],0.5*LENGTH, STARTZ-HEIGHT*0.5,WIDTH*0.5);
-    dBodySetPosition (body[4],0.5*LENGTH, STARTZ-HEIGHT*0.5,-WIDTH*0.5);
-
-    // front and back wheel hinges
-    for (i=0; i<4; i++) {
-        joint[i] = dJointCreateHinge2 (world,0);
-        dJointAttach (joint[i],body[0],body[i+1]);
-        const dReal *a = dBodyGetPosition (body[i+1]);
-        dJointSetHinge2Anchor (joint[i],a[0],a[1],a[2]);
-        dJointSetHinge2Axis1 (joint[i],0,1,0);
-        dJointSetHinge2Axis2 (joint[i],0,0,1);
-    }
-
-    // set joint suspension
-    for (i=0; i<4; i++) {
-        dJointSetHinge2Param (joint[i],dParamSuspensionERP,0.4);
-        dJointSetHinge2Param (joint[i],dParamSuspensionCFM,0.8);
-    }
-
-    // lock back wheels along the steering axis
-    for (i=2; i<4; i++) {
-        // set stops to make sure wheels always stay in alignment
-        dJointSetHinge2Param (joint[i],dParamLoStop,0);
-        dJointSetHinge2Param (joint[i],dParamHiStop,0);
-
-    }
-
-    // create car space and add it to the top level space
-    car_space = dSimpleSpaceCreate (space);
-    dSpaceSetCleanup (car_space,0);
-    dSpaceAdd (car_space,box[0]);
-    dSpaceAdd (car_space,sphere[0]);
-    dSpaceAdd (car_space,sphere[1]);
-    dSpaceAdd (car_space,sphere[2]);
-    dSpaceAdd (car_space,sphere[3]);
 
     //create cannon
     cannon_ball_body = dBodyCreate (world);
@@ -706,52 +667,9 @@ int main (int argc, char **argv)
 
 
     // SKYBOX
-    smgr->setSkyBox(true, "CSC-30019/CloudsSkyBox");
+    smgr->setSkyBox(true, "CSC-30019/SpaceSkyBox");
 
 
-    // Nodes for the buggy and the angled box in the ground
-    buggyNode = smgr->getRootSceneNode()->createChildSceneNode("buggynode");
-
-
-    // Entities for the various bits we are displaying
-    Ogre::Entity *ent = smgr->createEntity("buggy", "cube.mesh");//"RZR-002.mesh
-
-    buggyNode->showBoundingBox(true);
-    buggyNode->attachObject(ent);
-    buggyNode->scale(0.01*(LENGTH),0.01*(HEIGHT),0.01*(WIDTH));
-    //buggyNode->roll( Ogre::Degree(-90) );
-    // 0.01 originally
-
-
-    ent->setMaterialName("CSC-30019/PlainRed");
-
-
-    Ogre::Entity *spacest[9];
-    for(int i =0; i<9; i++){
-       spacest[i]= smgr->createEntity("cube.mesh");
-     }
-
-    Ogre::Entity *wheel1 = smgr->createEntity("wheel1", "sphere.mesh");
-    Ogre::Entity *wheel2 = smgr->createEntity("wheel2", "sphere.mesh");
-    Ogre::Entity *wheel3 = smgr->createEntity("wheel3", "sphere.mesh");
-    Ogre::Entity *wheel4 = smgr->createEntity("wheel4", "sphere.mesh");
-
-    wheel1node = smgr->getRootSceneNode()->createChildSceneNode("wheel1node");
-    wheel1node->attachObject(wheel1);
-    wheel1node->scale(0.002,0.0005,0.002);
-    wheel1node->setPosition(0.5*LENGTH,STARTZ-HEIGHT*0.5,0);
-    wheel2node = smgr->getRootSceneNode()->createChildSceneNode("wheel2node");
-    wheel2node->attachObject(wheel2);
-    wheel2node->scale(0.002,0.0005,0.002);
-    wheel2node->setPosition(-0.5*LENGTH,STARTZ-HEIGHT*0.5,0);
-    wheel3node = smgr->getRootSceneNode()->createChildSceneNode("wheel3node");
-    wheel3node->attachObject(wheel3);
-    wheel3node->scale(0.002,0.0005,0.002);
-    wheel3node->setPosition(-0.5*LENGTH,STARTZ-HEIGHT*0.5,0);
-    wheel4node = smgr->getRootSceneNode()->createChildSceneNode("wheel4node");
-    wheel4node->attachObject(wheel4);
-    wheel4node->scale(0.002,0.0005,0.002);
-    wheel4node->setPosition(-0.5*LENGTH,STARTZ-HEIGHT*0.5,0);
 
     //cannon
     cannonNode = smgr->getRootSceneNode()->createChildSceneNode();
@@ -765,17 +683,20 @@ int main (int argc, char **argv)
     cannonBarrelNode->attachObject(cannonBarrel);
     //cannonBarrelNode->scale(0.01,0.01,0.01);
 
+    cannonNode->setVisible(false);
+
     cannonBallNode = smgr->getRootSceneNode()->createChildSceneNode();
     cannonBall = smgr->createEntity("sphere.mesh");
     cannonBallNode->attachObject(cannonBall);
     cannonBallNode->scale(0.001,0.001,0.001);
 
 
-    //cannon
+    //cannon camera
 
     camFP = smgr->createCamera("CameraFP");
     camFP->setNearClipDistance(0.2);
     camFP->setAspectRatio(Ogre::Real(vp->getActualWidth()) / Ogre::Real(vp->getActualHeight()) );
+
 
     FPcamNode = cannonNode->createChildSceneNode("FPcamNode");
     FPcamNode->scale(0.0001,0.0001,0.0001);
@@ -805,7 +726,7 @@ int main (int argc, char **argv)
 
       setPlayers(n1, n2);
       */
-      setPlayers("player1", "player2");
+    setPlayers("player1", "player2");
 
     // render a frame for good measure
     root->renderOneFrame();
@@ -815,10 +736,12 @@ int main (int argc, char **argv)
     gameLoop();
 
     // tidy up
-    dGeomDestroy (box[0]);
-    dGeomDestroy (sphere[0]);
-    dGeomDestroy (sphere[1]);
-    dGeomDestroy (sphere[2]);
+    dGeomDestroy (ground);
+    dGeomDestroy(cannon_ball_geom);
+
+    //for(int x =0; x<9;x++)
+    //dGeomDestroy (mb->spaces[0]->spaces[x]->ODEgeomID);
+
     dJointGroupDestroy (contactgroup);
     dSpaceDestroy (space);
     dWorldDestroy (world);

@@ -27,7 +27,7 @@ Board::Board(int x, int y, int z, double margin)
   OgreNode->setOrientation( boardRot[0], boardRot[1], boardRot[2], boardRot[3]);
 
   OgreEntity = smgr->createEntity("cube.mesh");//
-  OgreEntity->setMaterialName("CSC-30019/Tile2");;
+  OgreEntity->setMaterialName("CSC-30019/Galaxy");
   OgreNode->attachObject(OgreEntity);
 
   OgreNode->scale(0.1,0.0001,.1);
@@ -79,13 +79,15 @@ bool Board::checkBoard(){
           hmatch = false;
           break;
         } else {
-          winningPlayer = this->spaces[i + j]->state;
+          //winningPlayer = this->spaces[i + j]->state;
           //std::cout << winningPlayer << "!!!" << winningPlayer->getName() << "!!!" <<std::endl;
         }
+        //winningPlayer = horizontalTemp;
 
       }
 
       if(hmatch){
+        winningPlayer = horizontalTemp;
         match = true; break;
       }
 
@@ -102,12 +104,13 @@ bool Board::checkBoard(){
           vmatch = false;
           break;
         }else {
-          winningPlayer = this->spaces[i/3 + j]->state;
+          //winningPlayer = this->spaces[i/3 + j]->state;
         }
+        //winningPlayer = verticleTemp;
 
       }
 
-      if(vmatch){ match = true; break;}
+      if(vmatch){ winningPlayer = verticleTemp; match = true; break;}
 
 
 
@@ -145,12 +148,14 @@ bool dmatch = true;
           std::cout << "NO MATCH: " << &diagTemp << " : " << this->spaces[j]->state <<std::endl;
 
         }else {
-          winningPlayer = this->spaces[j]->state;
+          //winningPlayer = this->spaces[j]->state;
         }
+        //winningPlayer = diagTemp;
 
       }
 
-  if(dmatch){ match = true; break;}
+
+  if(dmatch){ winningPlayer = diagTemp; match = true; break;}
 
 }
 
@@ -203,7 +208,7 @@ MainBoard::MainBoard()
   Ogre::MeshManager::getSingleton().createPlane("ground", Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME,
                                                 oground, 55, 55, 1, 1, true, 1, 55, 55, Ogre::Vector3::UNIT_Z );
   Ogre::Entity *OgreEntity = smgr->createEntity("ground");
-  OgreEntity->setMaterialName("CSC-30019/GrassFloor");
+  OgreEntity->setMaterialName("CSC-30019/PlainBlack");
   smgr->getRootSceneNode()->createChildSceneNode()->attachObject( OgreEntity );
 
   int count = 0;
@@ -320,9 +325,9 @@ bool MainBoard::checkBoard()
         }
 
       }
-
+      //winningPlayer = horizontalTemp;
       if(hmatch){
-         match = true; break;
+         winningPlayer = horizontalTemp; match = true; break;
        }
       //check for verticle wins
       Player *verticleTemp = this->spaces[i/3]->state;
@@ -339,8 +344,9 @@ bool MainBoard::checkBoard()
           //winningPlayer = this->spaces[i/3 + j]->state;
         }
       }
+      //winningPlayer = verticleTemp;
 
-      if(vmatch){ match = true; break;}
+      if(vmatch){ winningPlayer = verticleTemp; match = true; break;}
 
 
       }
@@ -372,15 +378,15 @@ bool MainBoard::checkBoard()
           {
             dmatch = false;
             break;
-            std::cout << "NO MATCH: " << &diagTemp << " : " << this->spaces[j]->state <<std::endl;
 
           }else {
-            winningPlayer = this->spaces[j]->state;
+            //winningPlayer = this->spaces[j]->state;
           }
 
         }
 
-      if(dmatch){ match = true; break;}
+      //winningPlayer = diagTemp;
+      if(dmatch){ winningPlayer = diagTemp; match = true; break;}
 
 }
       if(match){
@@ -403,7 +409,7 @@ bool MainBoard::checkBoard()
 Space::Space(int x, int z, int y, dSpaceID space)
 {
 
-  ODEgeomID = dCreateBox(space,1,0,1);//
+  ODEgeomID = dCreateBox(space,0.01,0.01,0.01);//
 
 
   dGeomSetPosition (ODEgeomID, x , z , y );
@@ -415,12 +421,12 @@ Space::Space(int x, int z, int y, dSpaceID space)
   OgreNode->setPosition(boardPos[0],boardPos[1],boardPos[2]);
   OgreNode->setOrientation( boardRot[0] , boardRot[1], boardRot[2], boardRot[3]);
 
-  OgreEntity = smgr->createEntity("cube.mesh");//
+  OgreEntity = smgr->createEntity("sphere.mesh");//
   //OgreEntity = smgr->createEntity("sphere.mesh");
   OgreEntity->setMaterialName("CSC-30019/Tile1");;
   OgreNode->attachObject(OgreEntity);
 
-  OgreNode->scale(.01,.01,.01);
+  OgreNode->scale(0.005,0.005,0.005);
 
 
 }

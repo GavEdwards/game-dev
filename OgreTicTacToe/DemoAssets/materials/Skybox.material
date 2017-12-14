@@ -49,3 +49,21 @@ material CSC-30019/CloudsSkyBox
                 }
         }
 }
+
+material CSC-30019/SpaceGavSkyBox
+{
+        technique
+        {
+                pass
+                {
+                        lighting off
+                        depth_write off
+
+                        texture_unit
+                        {
+                                cubic_texture clouds.png separateUV
+                                tex_address_mode clamp
+                        }
+                }
+        }
+}
